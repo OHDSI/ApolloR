@@ -15,6 +15,7 @@
 # limitations under the License.
 
 # library(dplyr)
+# source("R/HelperFunctions.R")
 
 #' Extract data from the database
 #' 

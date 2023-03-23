@@ -2,6 +2,8 @@ cdmTableName,cdmFieldName
 person,person_id
 person,gender_concept_id
 person,year_of_birth
+person,month_of_birth
+person,day_of_birth
 observation_period,person_id
 observation_period,observation_period_start_date
 observation_period,observation_period_end_date
@@ -43,5 +45,6 @@ death,person_id
 death,death_date
 concept,concept_id
 concept,concept_name
+concept,concept_class_id
 concept_ancestor,ancestor_concept_id
 concept_ancestor,descendant_concept_id
