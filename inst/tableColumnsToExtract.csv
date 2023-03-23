@@ -6,6 +6,7 @@ observation_period,person_id
 observation_period,observation_period_start_date
 observation_period,observation_period_end_date
 visit_occurrence,person_id
+visit_occurrence,visit_occurrence_id
 visit_occurrence,visit_concept_id
 visit_occurrence,visit_start_date
 visit_occurrence,visit_end_date

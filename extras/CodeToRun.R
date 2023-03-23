@@ -13,8 +13,8 @@ connectionDetails <- DatabaseConnector::createConnectionDetails(
 )
 cdmDatabaseSchema <- "cdm_truven_mdcd_v2321"
 workDatabaseSchema <- "scratch_mschuemi"
-sampleTable <- "GeneralPretrainedModelTools_mdcd"
-folder <- "d:/GeneralPretrainedModelTools_MDCD"
+partitionTablePrefix <- "GPM_MDCD"
+folder <- "d:/GPM_MDCD"
 
 # Optum EHR
 connectionDetails <- DatabaseConnector::createConnectionDetails(
@@ -53,32 +53,14 @@ sampleTable <- "GeneralPretrainedModelTools_cprd"
 folder <- "d:/GeneralPretrainedModelTools_cprd"
 
 # Data fetch -------------------------------------------------------------------
-if (!dir.exists(folder)) {
-  dir.create(folder)
-}
-
-data <- extractData(
+extractCdmToParquet(
   connectionDetails = connectionDetails,
   cdmDatabaseSchema = cdmDatabaseSchema,
   workDatabaseSchema = workDatabaseSchema,
-  sampleTable = sampleTable,
-  sampleSize = 1e6,
-  chunkSize = 1e5
+  partitionTablePrefix = partitionTablePrefix,
+  folder = folder,
+  sampleSize = 100000,
+  partitions = 10,
+  maxCores = 4,
+  forceRestart = F
 ) 
-Andromeda::saveAndromeda(data, file.path(folder, "Data.zip"))
-
-# Co-occurrence matrix construction --------------------------------------------
-data <- Andromeda::loadAndromeda(file.path(folder, "Data.zip"))
-matrix <- createMatrix(data)
-saveRDS(matrix, file.path(folder, "Matrix.rds"))
-
-# Compute global concept vectors -----------------------------------------------
-matrix <- readRDS(file.path(folder, "Matrix.rds"))
-conceptVectors <- computeGlobalVectors(matrix, vectorSize = 300, maxCores = maxCores)
-saveRDS(conceptVectors, file.path(folder, "ConceptVectors.rds"))
-
-# Get similar concepts ---------------------------------------------------------
-conceptVectors <- readRDS(file.path(folder, "ConceptVectors.rds"))
-getSimilarConcepts(conceptId = 312327, conceptVectors = conceptVectors, n = 25)
-getSimilarConcepts(conceptId = 2005415, conceptVectors = conceptVectors, n = 25)
-getSimilarConcepts(conceptId = 1124300, conceptVectors = conceptVectors, n = 25)

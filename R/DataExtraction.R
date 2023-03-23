@@ -20,135 +20,230 @@
 #' 
 #' @description 
 #' Extract data from the server for a random sample of persons, and stores them 
-#' in the local file system as Parquert files
+#' in the local file system as Parquet files. The data are split in to a number of 
+#' partitions (the number of partitions can be specified by the user). 
 #' 
 #' 
-#' @param connectionDetails            An R object of type `connectionDetails` created using the
-#'                                     [DatabaseConnector::createConnectionDetails()] function.
-#' @param cdmDatabaseSchema            The name of the database schema that contains the OMOP CDM
-#'                                     instance. Requires read permissions to this database. On SQL
-#'                                     Server, this should specify both the database and the schema,
-#'                                     so for example 'cdm_instance.dbo'.
-#' @param workDatabaseSchema           The name of the database schema where work tables can be created.
-#' @param sampleTable                  The name of the table where the sampled observation period IDs 
-#'                                     will be stored.
-#' @param folder                       The folder on the local file system where the Parquet files will 
-#'                                     be written.
-#' @param sampleSize                   The number of persons to be included in the sample.
-#' @param partitions                   The number of partitions. Fewer partitions may lead to memory 
-#'                                     issues.
-#' @param maxCores                     The maximum number of parallel threads to use.
+#' @param connectionDetails    An R object of type `connectionDetails` created using the
+#'                             [DatabaseConnector::createConnectionDetails()] function.
+#' @param cdmDatabaseSchema    The name of the database schema that contains the OMOP CDM
+#'                             instance. Requires read permissions to this database. On SQL
+#'                             Server, this should specify both the database and the schema,
+#'                             so for example 'cdm_instance.dbo'.
+#' @param workDatabaseSchema   The name of the database schema where work tables can be created.
+#' @param partitionTablePrefix The prefix to use when creating table names in the 
+#'                             `workDatabaseSChema` for storing the person ID and concept ID 
+#'                             partition tables.
+#' @param folder               The folder on the local file system where the Parquet files will 
+#'                             be written.
+#' @param sampleSize           The number of persons to be included in the sample.
+#' @param partitions           The number of partitions. Fewer partitions may lead to memory 
+#'                             issues.
+#' @param maxCores             The maximum number of parallel threads to use.
+#' @param forceRestart         If `FALSE`, when data is already found in the `folder` the process
+#'                             will continue where it left off. If `TRUE`, any existing data files
+#'                             will be deleted, and the process will start from scratch.  
 #'                                     
 #' @export
-extractData <- function(connectionDetails,
-                        cdmDatabaseSchema,
-                        workDatabaseSchema,
-                        sampleTable = "GeneralPretrainedModelTools_sample",
-                        folder,
-                        sampleSize = 1e6,
-                        partitions = 200,
-                        maxCores = 3) {
+extractCdmToParquet <- function(connectionDetails,
+                                cdmDatabaseSchema,
+                                workDatabaseSchema,
+                                partitionTablePrefix = "GPM_",
+                                folder,
+                                sampleSize = 1e6,
+                                partitions = 200,
+                                maxCores = 3,
+                                forceRestart = FALSE) {
   errorMessages <- checkmate::makeAssertCollection()
   checkmate::assertClass(connectionDetails, "ConnectionDetails", add = errorMessages)
   checkmate::assertCharacter(cdmDatabaseSchema, len = 1, add = errorMessages)
   checkmate::assertCharacter(workDatabaseSchema, len = 1, add = errorMessages)
-  checkmate::assertCharacter(sampleTable, len = 1, add = errorMessages)
+  checkmate::assertCharacter(partitionTablePrefix, len = 1, add = errorMessages)
   checkmate::assertCharacter(folder, len = 1, add = errorMessages)
   checkmate::assertInt(sampleSize, lower = 0, add = errorMessages)
   checkmate::assertInt(partitions, lower = 1, add = errorMessages)
   checkmate::assertInt(maxCores, lower = 1, add = errorMessages)
+  checkmate::assertLogical(forceRestart, len = 1, add = errorMessages)
   checkmate::reportAssertions(collection = errorMessages)
-  DatabaseConnector::assertTempEmulationSchemaSet(connectionDetails$dbms)
   
   startTime <- Sys.time()
   
-  createSampleTable(
+  ParallelLogger::addDefaultFileLogger(
+    fileName = file.path(folder, "log.txt"),
+    name = "DATA_EXTRACTION_FILE_LOGGER"
+  )
+  ParallelLogger::addDefaultErrorReportLogger(
+    fileName = file.path(folder, "errorReportR.txt"),
+    name = "DATA_EXRACTION_ERRORREPORT_LOGGER"
+  )
+  on.exit(ParallelLogger::unregisterLogger("DATA_EXTRACTION_FILE_LOGGER", silent = TRUE))
+  on.exit(ParallelLogger::unregisterLogger("DATA_EXRACTION_ERRORREPORT_LOGGER", silent = TRUE), add = TRUE)
+  
+  if (!dir.exists(folder)) {
+    dir.create(folder, recursive = TRUE)
+  }
+  personIdPartitionTable <- sprintf("%s_pid_part", partitionTablePrefix)
+  conceptIdPartitionTable <- sprintf("%s_cid_part", partitionTablePrefix)
+  restart <- createPartitionTables(
     connectionDetails = connectionDetails,
     cdmDatabaseSchema = cdmDatabaseSchema,
     workDatabaseSchema = workDatabaseSchema,
-    sampleTable = sampleTable,
+    personIdPartitionTable = personIdPartitionTable,
+    conceptIdPartitionTable = conceptIdPartitionTable,
     sampleSize = sampleSize,
-    partitions = partitions
+    partitions = partitions,
+    forceRestart = forceRestart
+  )
+  createFolders(folder, restart)
+  jobs <- createJobList(partitions, folder)
+  executeExtractDataJobs(
+    jobs = jobs, 
+    connectionDetails = connectionDetails,
+    cdmDatabaseSchema = cdmDatabaseSchema,
+    workDatabaseSchema = workDatabaseSchema,
+    personIdPartitionTable = personIdPartitionTable,
+    conceptIdPartitionTable = conceptIdPartitionTable,
+    maxCores = maxCores
+  )
+  dropPartitionTables(
+    connectionDetails = connectionDetails,
+    workDatabaseSchema = workDatabaseSchema,
+    personIdPartitionTable = personIdPartitionTable,
+    conceptIdPartitionTable = conceptIdPartitionTable
   )
   
-  tableColumnsToExtract <- getTableColumnsToExtract()
-  domainTables <- tableColumnsToExtract %>%
-    filter(!grepl("^concept", .data$cdmTableName)) %>%
-    distinct(.data$cdmTableName) %>%
-    pull(.data$cdmTableName)
+  delta <- Sys.time() - startTime
+  message(paste("Extracting data took", signif(delta, 3), attr(delta, "units")))
+}
+
+createPartitionTables <- function(connectionDetails,
+                                  cdmDatabaseSchema,
+                                  workDatabaseSchema,
+                                  personIdPartitionTable,
+                                  conceptIdPartitionTable,
+                                  sampleSize,
+                                  partitions,
+                                  forceRestart) {
+  connection <- DatabaseConnector::connect(connectionDetails)
+  on.exit(DatabaseConnector::disconnect(connection))
   
-  conceptTables <- tableColumnsToExtract %>%
-    filter(grepl("^concept", .data$cdmTableName)) %>%
-    distinct(.data$cdmTableName) %>%
-    pull(.data$cdmTableName)
-  
-  for (table in c(domainTables, conceptTables)) {
-    dir.create(file.path(folder, table), recursive = TRUE)
+  if (!forceRestart && 
+      DatabaseConnector::existsTable(
+        connection = connection,
+        databaseSchema = workDatabaseSchema,
+        tableName = personIdPartitionTable
+      ) &&
+      DatabaseConnector::existsTable(
+        connection = connection,
+        databaseSchema = workDatabaseSchema,
+        tableName = conceptIdPartitionTable
+      )
+  ) {
+    message("Partition tables already exists, so using those")
+    return(FALSE)
+  } else {
+    message("Creating partition tables")
+    sql <- SqlRender::loadRenderTranslateSql(
+      sqlFilename = "createPartitionTables.sql",
+      packageName = "GeneralPretrainedModelTools",
+      dbms = connectionDetails$dbms,
+      cdm_database_schema = cdmDatabaseSchema,
+      work_database_schema = workDatabaseSchema,
+      person_id_partition_table = personIdPartitionTable,
+      concept_id_partition_table = conceptIdPartitionTable,
+      sample_size = sampleSize,
+      partitions = partitions
+    )
+    DatabaseConnector::executeSql(connection, sql, reportOverallTime = FALSE)
+    return(TRUE)
   }
-  
-  jobs <- expand.grid(table = domainTables, partition = seq_len(partitions)) %>%
-    bind_rows(tibble(table = conceptTables, partition = NA)) 
-  jobs <- split(jobs, seq_len(nrow(jobs)))
-  
-  cluster <- ParallelLogger::makeCluster(maxCores)
+}
+
+createJobList <- function(partitions, folder) {
+  tablesToExtract <- getTableColumnsToExtract() %>%
+    distinct(.data$cdmTableName) %>%
+    pull(.data$cdmTableName)
+  jobs <- expand.grid(table = tablesToExtract, partition = seq_len(partitions)) %>%
+    as_tibble() %>%
+    mutate(fileName = file.path(folder, .data$table, sprintf("part%04d.parquet", .data$partition)))
+  return(jobs)
+}
+
+createFolders <- function(folder, restart) {
+  foldersToCreate <- getTableColumnsToExtract() %>%
+    distinct(.data$cdmTableName) %>%
+    mutate(folder = file.path(!!folder, .data$cdmTableName)) %>%
+    pull(.data$folder)
+  if (restart) {
+    for (folder in foldersToCreate) {
+      if (dir.exists(folder)) {
+        message(sprintf("Folder %s already exists. Deleting old data", folder))
+        unlink(folder, recursive = TRUE)
+      }
+    }
+  }
+  for (folder in foldersToCreate) {
+    if (!dir.exists(folder)) {
+      dir.create(folder, recursive = TRUE)
+    }
+  }
+}
+
+executeExtractDataJobs <- function(jobs, 
+                                   connectionDetails,
+                                   cdmDatabaseSchema,
+                                   workDatabaseSchema,
+                                   personIdPartitionTable,
+                                   conceptIdPartitionTable,
+                                   maxCores) {
+  jobs <- jobs %>%
+    filter(!file.exists(.data$fileName)) %>%
+    mutate(sleepSeconds = 0)
+  if (nrow(jobs) == 0) {
+    return()
+  }
+  # Stagger jobs so as not to overwhelm database server at start.
+  # (Not sure if this helps, but seems a good idea)
+  for (i in seq_len(min(maxCores, nrow(jobs)))) {
+    jobs$sleepSeconds[i] <- (i - 1) * 30
+  }
+  clusterSize <- min(maxCores, nrow(jobs))
+  cluster <- ParallelLogger::makeCluster(clusterSize)
   on.exit(ParallelLogger::stopCluster(cluster))
   ParallelLogger::clusterRequire(cluster, "dplyr")
+  message("Opening connections")
   ParallelLogger::clusterApply(
     cluster = cluster, 
-    x = seq_len(maxCores), 
+    x = seq_len(clusterSize), 
     fun = createConnection,
     connectionDetails = connectionDetails
   )
+  message("Extracting data from CDM to Parquet files")
+  jobs <- split(jobs, seq_len(nrow(jobs)))
   ParallelLogger::clusterApply(
     cluster = cluster, 
     x = jobs, 
     fun = executeExtractDataJob,
+    stopOnError = TRUE,
     cdmDatabaseSchema = cdmDatabaseSchema,
     workDatabaseSchema = workDatabaseSchema,
-    sampleTable = sampleTable,
-    folder = folder
+    personIdPartitionTable = personIdPartitionTable,
+    conceptIdPartitionTable = conceptIdPartitionTable
   )
-  delta <- Sys.time() - startTime
-  message(paste("Extracting data took", signif(delta, 3), attr(delta, "units")))
-  
-}
-
-createSampleTable <- function(connectionDetails,
-                              cdmDatabaseSchema,
-                              workDatabaseSchema,
-                              sampleTable,
-                              sampleSize,
-                              partitions) {
-  connection <- DatabaseConnector::connect(connectionDetails)
-  on.exit(DatabaseConnector::disconnect(connection))
-  
-  message("Taking sample")
-  sql <- SqlRender::loadRenderTranslateSql(
-    sqlFilename = "CreateSample.sql",
-    packageName = "GeneralPretrainedModelTools",
-    dbms = connectionDetails$dbms,
-    cdm_database_schema = cdmDatabaseSchema,
-    work_database_schema = workDatabaseSchema,
-    sample_table = sampleTable,
-    sample_size = sampleSize,
-    partitions = partitions
-  )
-  DatabaseConnector::executeSql(connection, sql, reportOverallTime = FALSE)
 }
 
 threadEnv <- new.env()
 
-createConnection <- function(job, 
+createConnection <- function(dummy, 
                              connectionDetails) {
   connection <- DatabaseConnector::connect(connectionDetails)
   assign("connection", connection, envir = threadEnv)
+  reg.finalizer(threadEnv, closeConnection, onexit = TRUE)
 }
 
-.Last <- function() {
-  if (exists("connection", envir = threadEnv)) {
-    connection <- get("connection", envir = threadEnv)
-    remove("connection", envir = threadEnv)
-    ParallelLogger::logDebug("Disconnecting from server")
+closeConnection <- function(env) {
+  if (exists("connection", envir = env)) {
+    connection <- get("connection", envir = env)
     DatabaseConnector::disconnect(connection)
   }
 }
@@ -156,8 +251,8 @@ createConnection <- function(job,
 executeExtractDataJob <- function(job, 
                                   cdmDatabaseSchema,
                                   workDatabaseSchema,
-                                  sampleTable = sampleTable,
-                                  folder) {
+                                  personIdPartitionTable,
+                                  conceptIdPartitionTable) {
   connection <- get("connection", envir = threadEnv)
   columnsToExtract <- getTableColumnsToExtract() %>%
     filter(.data$cdmTableName == job$table) %>%
@@ -167,34 +262,69 @@ executeExtractDataJob <- function(job,
                  paste(paste(job$table, columnsToExtract, sep = "."), collapse = ",\n  "),
                  cdmDatabaseSchema,
                  job$table)
-  if (is.na(job$partition)) {
-    if (job$table == "concept") {
-      sql <- paste0(sql, "\nWHERE standard_concept = 'S';")
-    }
-    sql <- paste0(sql, ";")
+  if (job$table == "concept") {
+    sql <- paste0(
+      sql,
+      sprintf("\nINNER JOIN %s.%s\n  ON concept.concept_id = %s.concept_id\nWHERE partition_id = %d;",
+              workDatabaseSchema,
+              conceptIdPartitionTable,
+              conceptIdPartitionTable,
+              job$partition
+      )
+    )
+  } else if (job$table == "concept_ancestor") {
+    sql <- paste0(
+      sql,
+      sprintf("\nINNER JOIN %s.%s\n  ON concept_ancestor.ancestor_concept_id = %s.concept_id\nWHERE partition_id = %d;",
+              workDatabaseSchema,
+              conceptIdPartitionTable,
+              conceptIdPartitionTable,
+              job$partition
+      )
+    )
   } else {
-    sql <- paste0(sql,
-                  sprintf("\nINNER JOIN %s.%s\n  ON %s.person_id = %s.person_id\nWHERE partition_id = %d;",
-                          workDatabaseSchema,
-                          sampleTable,
-                          job$table,
-                          sampleTable,
-                          job$partition
-                  )
+    sql <- paste0(
+      sql,
+      sprintf("\nINNER JOIN %s.%s\n  ON %s.person_id = %s.person_id\nWHERE partition_id = %d;",
+              workDatabaseSchema,
+              personIdPartitionTable,
+              job$table,
+              personIdPartitionTable,
+              job$partition
+      )
     )
   }
+  if (job$sleepSeconds > 0) {
+    message(sprintf("Waiting for %d seconds before sending query to server", job$sleepSeconds))
+    Sys.sleep(job$sleepSeconds)
+  }
+  message(sprintf("Fetching partition %d of table %s", job$partition, job$table))
   data <- DatabaseConnector::renderTranslateQuerySql(
     connection = connection,
-    sql = sql
+    sql = sql,
+    integer64AsNumeric = FALSE
   )
-  if (is.na(job$partition)) {
-    fileName <- "all.parquet"
-  } else {
-    fileName <- sprintf("part%04d.parquet", job$partition)
-  }
-  
+  message(sprintf("Writing data partition to %s", job$fileName))
   arrow::write_parquet(
     x = data,
-    sink = file.path(folder, job$table, fileName),
+    sink = job$fileName,
   )
+}
+
+dropPartitionTables <- function(connectionDetails,
+                                workDatabaseSchema,
+                                personIdPartitionTable,
+                                conceptIdPartitionTable) {
+  connection <- DatabaseConnector::connect(connectionDetails)
+  on.exit(DatabaseConnector::disconnect(connection))
+  message("Dropping partition tables")
+  sql <- SqlRender::loadRenderTranslateSql(
+    sqlFilename = "dropPartitionTables.sql",
+    packageName = "GeneralPretrainedModelTools",
+    dbms = connectionDetails$dbms,
+    work_database_schema = workDatabaseSchema,
+    person_id_partition_table = personIdPartitionTable,
+    concept_id_partition_table = conceptIdPartitionTable
+  )
+  DatabaseConnector::executeSql(connection, sql, reportOverallTime = FALSE)
 }
