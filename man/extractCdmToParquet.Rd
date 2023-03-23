@@ -13,7 +13,8 @@ extractCdmToParquet(
   sampleSize = 1e+06,
   partitions = 200,
   maxCores = 3,
-  forceRestart = FALSE
+  forceRestart = FALSE,
+  dropPartitionTablesWhenDone = FALSE
 )
 }
 \arguments{
@@ -44,9 +45,19 @@ issues.}
 \item{forceRestart}{If \code{FALSE}, when data is already found in the \code{folder} the process
 will continue where it left off. If \code{TRUE}, any existing data files
 will be deleted, and the process will start from scratch.}
+
+\item{dropPartitionTablesWhenDone}{Drop the partition tables when done? If not, they could be
+reused for a future data pull.}
 }
 \description{
 Extract data from the server for a random sample of persons, and stores them
-in the local file system as Parquet files. The data are split in to a number of
-partitions (the number of partitions can be specified by the user).
+in the local file system as Parquet files. Has the following features:
+\itemize{
+\item Extracts the subset of CDM tables and fields listed here: https://github.com/OHDSI/GeneralPretrainedModelTools/blob/main/inst/tableColumnsToExtract.csv
+\item Can restrict to a sample of person_ids, as specified with the \code{sampleSize} argument.
+\item Loads and saves the tables in as many partitions as the user specifies (see \code{partitions} argument). The partitioning is done by person_id (or concept_id for the concept and concept_ancestor table), in a way that the n-th partition of each domain table refers to the same person_ids.
+\item Restricts the concept table to  standard concepts only (ie. those concepts that are allowed to be used in the CDM), to save space.
+\item Loading can be done with multiple threads (see \code{maxCores} argument) for speedup.
+\item If the process is interrupted for some reason (e.g. the server drops the connection) you can just restart it and it will pick up where it left off. (unless \code{forceRestart = TRUE}) .
+}
 }
