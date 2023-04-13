@@ -155,7 +155,7 @@ createPartitionTables <- function(connectionDetails,
   } else {
     message("Creating partition tables")
     sql <- SqlRender::loadRenderTranslateSql(
-      sqlFilename = "createPartitionTables.sql",
+      sqlFilename = "CreatePartitionTables.sql",
       packageName = "GeneralPretrainedModelTools",
       dbms = connectionDetails$dbms,
       cdm_database_schema = cdmDatabaseSchema,
@@ -330,7 +330,7 @@ dropPartitionTables <- function(connectionDetails,
   on.exit(DatabaseConnector::disconnect(connection))
   message("Dropping partition tables")
   sql <- SqlRender::loadRenderTranslateSql(
-    sqlFilename = "dropPartitionTables.sql",
+    sqlFilename = "DropPartitionTables.sql",
     packageName = "GeneralPretrainedModelTools",
     dbms = connectionDetails$dbms,
     work_database_schema = workDatabaseSchema,
