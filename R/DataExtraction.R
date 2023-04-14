@@ -315,6 +315,7 @@ executeExtractDataJob <- function(job,
     sql = sql,
     integer64AsNumeric = FALSE
   )
+  colnames(data) <- tolower(colnames(data))
   message(sprintf("Writing data partition to %s", job$fileName))
   arrow::write_parquet(
     x = data,

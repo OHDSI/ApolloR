@@ -28,6 +28,18 @@ workDatabaseSchema <- "scratch_mschuemi"
 partitionTablePrefix <- "GPM_CCAE"
 folder <- "d:/GPM_CCAE"
 
+# CCAE (linux)
+connectionDetails <- DatabaseConnector::createConnectionDetails(
+  dbms = "redshift",
+  connectionString = !!keyring::key_get("redShiftConnectionStringOhdaCcae"),
+  user = !!keyring::key_get("redShiftUserName"),
+  password = !!keyring::key_get("redShiftPassword")
+)
+cdmDatabaseSchema <- "cdm_truven_ccae_v2182"
+workDatabaseSchema <- "scratch_mschuemi"
+partitionTablePrefix <- "GPM_CCAE"
+folder <- "/data/gpm_CCAE"
+
 # Data fetch -------------------------------------------------------------------
 extractCdmToParquet(
   connectionDetails = connectionDetails,
@@ -40,3 +52,6 @@ extractCdmToParquet(
   maxCores = 4,
   forceRestart = FALSE
 ) 
+
+# Descriptives -----------------------------------------------------------------
+computeParquetDescriptives(folder = folder)
