@@ -276,7 +276,7 @@ executeExtractDataJob <- function(job,
   if (job$table == "concept") {
     sql <- paste0(
       sql,
-      sprintf("\nINNER JOIN %s.%s\n  ON concept.concept_id = %s.concept_id\nWHERE partition_id = %d;",
+      sprintf("\nINNER JOIN %s.%s\n  ON concept.concept_id = %s.concept_id\nWHERE partition_id = %d\nORDER BY concept.concept_id;",
               workDatabaseSchema,
               conceptIdPartitionTable,
               conceptIdPartitionTable,
@@ -286,7 +286,7 @@ executeExtractDataJob <- function(job,
   } else if (job$table == "concept_ancestor") {
     sql <- paste0(
       sql,
-      sprintf("\nINNER JOIN %s.%s\n  ON concept_ancestor.ancestor_concept_id = %s.concept_id\nWHERE partition_id = %d;",
+      sprintf("\nINNER JOIN %s.%s\n  ON concept_ancestor.ancestor_concept_id = %s.concept_id\nWHERE partition_id = %d\nORDER BY concept_ancestor.ancestor_concept_id;",
               workDatabaseSchema,
               conceptIdPartitionTable,
               conceptIdPartitionTable,
@@ -296,12 +296,13 @@ executeExtractDataJob <- function(job,
   } else {
     sql <- paste0(
       sql,
-      sprintf("\nINNER JOIN %s.%s\n  ON %s.person_id = %s.person_id\nWHERE partition_id = %d;",
+      sprintf("\nINNER JOIN %s.%s\n  ON %s.person_id = %s.person_id\nWHERE partition_id = %d\nORDER BY %s.person_id;",
               workDatabaseSchema,
               personIdPartitionTable,
               job$table,
               personIdPartitionTable,
-              job$partition
+              job$partition,
+              job$table
       )
     )
   }
