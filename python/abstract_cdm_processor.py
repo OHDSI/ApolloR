@@ -20,7 +20,7 @@ CDM_TABLES = [
     "observation",
     "death",
 ]
-
+PERSON_ID = "person_id"
 
 class AbstractCdmDataProcessor(ABC):
     """
@@ -83,17 +83,17 @@ class AbstractCdmDataProcessor(ABC):
         for person in self._create_table_iterator(
             table_name=PERSON, partition_i=partition_i
         ):
-            person_id = person["person_id"].iat[0]
+            person_id = person[PERSON_ID].iat[0]
             cdm_tables = {PERSON: person}
             for table_name, table_person_data in table_person_datas.items():
                 while (
                     table_person_data is not None
-                    and table_person_data["person_id"].iat[0] < person_id
+                    and table_person_data[PERSON_ID].iat[0] < person_id
                 ):
                     table_person_data = next(table_iterators[table_name], None)
                 if (
                     table_person_data is not None
-                    and table_person_data["person_id"].iat[0] == person_id
+                    and table_person_data[PERSON_ID].iat[0] == person_id
                 ):
                     cdm_tables[table_name] = table_person_data
                 else:
@@ -118,7 +118,7 @@ class AbstractCdmDataProcessor(ABC):
         for batch in table.to_batches():
             batch = batch.to_pandas()
             # batch.columns = batch.columns.str.lower()
-            for person_id, group in batch.groupby("person_id"):
+            for person_id, group in batch.groupby(PERSON_ID):
                 if buffer_person_id is None:
                     buffer = group
                     buffer_person_id = person_id
@@ -127,7 +127,8 @@ class AbstractCdmDataProcessor(ABC):
                         buffer = buffer.append(group)
                     else:
                         yield buffer
-                        buffer_person_id = None
+                        buffer = group
+                        buffer_person_id = person_id
 
         if buffer_person_id is not None:
             yield buffer
