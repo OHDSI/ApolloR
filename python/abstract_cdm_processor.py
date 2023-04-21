@@ -45,7 +45,7 @@ class AbstractCdmDataProcessor(ABC):
         pass
 
     @abstractmethod
-    def _process_person(self, person_id: int, cdm_tables: List[pd.DataFrame]):
+    def _process_person(self, person_id: int, cdm_tables: Dict[str, pd.DataFrame]):
         # This functon is called for every person (It is executed within a thread.)
         pass
 
@@ -60,8 +60,15 @@ class AbstractCdmDataProcessor(ABC):
         """
         self._get_partition_counts()
         self._prepare()
-        with Pool(processes=self._max_cores) as pool:
-            pool.map(self._process_partition, range(self._person_partition_count))
+        if (self._max_cores == -1):
+            # For profiling, run small set of partitions in main thread:
+            self._person_partition_count = 2
+            for partition_i in range(self._person_partition_count):
+                self._process_partition(partition_i)
+        else:
+            with Pool(processes=self._max_cores) as pool:
+                pool.map(self._process_partition, range(self._person_partition_count))
+                pool.close()
 
     def _get_partition_counts(self):
         files = os.listdir(os.path.join(self._cdm_data_path, PERSON))
@@ -139,7 +146,7 @@ class AbstractCdmDataProcessor(ABC):
 
 class AbstractToParquetCdmDataProcessor(AbstractCdmDataProcessor):
     """
-    Extends the AbstractCdmDataProcessor by providing a private _output DataFrame that
+    Extends the AbstractCdmDataProcessor by providing a private _output DataFrame list that
     can be appended to after processing each patient. After a partition is finished, the
     content of _output is written to a Parquet file.
     """
@@ -151,35 +158,15 @@ class AbstractToParquetCdmDataProcessor(AbstractCdmDataProcessor):
         self._output_path = output_path
 
     def _prepare_partition(self, partition_i: int):
-        self._output = pd.DataFrame()
+        self._output = []
 
     def _finish_partition(self, partition_i: int):
         file_name = "part{:04d}.parquet".format(partition_i + 1)
         pq.write_table(
-            table=pa.Table.from_pandas(self._output),
+            table=pa.Table.from_pandas(pd.concat(self._output)),
             where=os.path.join(self._output_path, file_name),
         )
 
     def _prepare(self):
         if not os.path.exists(self._output_path):
             os.makedirs(self._output_path)
-
-
-class ExampleCdmDataProcessor(AbstractToParquetCdmDataProcessor):
-    """
-    A silly implementation of AbstractToParquetCdmDataProcessor, to demonstrate
-    its use.
-    """
-
-    def _process_person(self, person_id: int, cdm_tables: Dict[str, pd.DataFrame]):
-        # Silly example: dump contents of person table to output:
-        self._output = self._output.append(cdm_tables[PERSON])
-
-
-if __name__ == "__main__":
-    my_cdm_data_processor = ExampleCdmDataProcessor(
-        cdm_data_path="d:/GPM_MDCD",
-        max_cores=10,
-        output_path="d:/GPM_MDCD/person_sequence",
-    )
-    my_cdm_data_processor.process_cdm_data()

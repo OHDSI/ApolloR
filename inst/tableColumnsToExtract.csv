@@ -5,6 +5,7 @@ person,year_of_birth,no
 person,month_of_birth,no
 person,day_of_birth,no
 observation_period,person_id,no
+observation_period,observation_period_id,no
 observation_period,observation_period_start_date,no
 observation_period,observation_period_end_date,no
 visit_occurrence,person_id,no
