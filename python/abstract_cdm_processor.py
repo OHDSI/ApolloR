@@ -30,7 +30,7 @@ class AbstractCdmDataProcessor(ABC):
     each person in the data.
     """
 
-    def __init__(self, cdm_data_path: str, max_cores: int = None):
+    def __init__(self, cdm_data_path: str, max_cores: int = -1):
         self._cdm_data_path = cdm_data_path
         self._max_cores = max_cores
 
@@ -151,21 +151,22 @@ class AbstractToParquetCdmDataProcessor(AbstractCdmDataProcessor):
     content of _output is written to a Parquet file.
     """
 
-    def __init__(self, cdm_data_path: str, output_path: str, max_cores: int = None):
+    def __init__(self, cdm_data_path: str, output_path: str, max_cores: int = -1):
         super(AbstractToParquetCdmDataProcessor, self).__init__(
             cdm_data_path=cdm_data_path, max_cores=max_cores
         )
         self._output_path = output_path
 
     def _prepare_partition(self, partition_i: int):
-        self._output = []
+        self._output:List[pa.DataFrame] = []
 
     def _finish_partition(self, partition_i: int):
-        file_name = "part{:04d}.parquet".format(partition_i + 1)
-        pq.write_table(
-            table=pa.Table.from_pandas(pd.concat(self._output)),
-            where=os.path.join(self._output_path, file_name),
-        )
+        if (len(self._output) > 0):
+            file_name = "part{:04d}.parquet".format(partition_i + 1)
+            pq.write_table(
+                table=pa.Table.from_pandas(pd.concat(self._output)),
+                where=os.path.join(self._output_path, file_name),
+            )
 
     def _prepare(self):
         if not os.path.exists(self._output_path):
