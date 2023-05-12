@@ -1,8 +1,10 @@
 from typing import Dict, List, Callable
 import datetime as dt
+import os
 
 import pandas as pd
 import numpy as np
+import pyarrow.parquet as pq
 
 OBSERVATION_PERIOD = "observation_period"
 OBSERVATION_PERIOD_ID = "observation_period_id"
@@ -67,6 +69,8 @@ VISIT_OCCURRENCE_ID = "visit_occurrence_id"
 VISIT_START_DATE = "visit_start_date"
 VISIT_END_DATE = "visit_end_date"
 VISIT_CONCEPT_ID = "visit_concept_id"
+CONCEPT = "concept"
+CONCEPT_ANCESTOR = "concept_ancestor"
 
 
 def call_per_observation_period(
@@ -270,3 +274,20 @@ def group_by_visit(
         key=lambda x: x.visit_start_date
     )
     return visit_datas
+
+def load_mapping_to_ingredients(cdm_data_path: str) -> pd.DataFrame:
+    """
+    Uses the concept and concept_ancestor table to construct a mapping from drugs to ingredients.
+    Args:
+        cdm_data_path: The path where the CDM Parquet files are saved (using the GeneralPretrainModelTools packages).
+
+    Yields:
+        A DataFrame with two columns: "drug_concept_id" and "ingredient_concept_id". An index is placed on drug_concept_id for fast joining.
+    """
+    ingredients = pq.read_table(os.path.join(cdm_data_path, CONCEPT), columns=["concept_id"], filters=[("concept_class_id", "==", "Ingredient")])
+    concept_ancestor = pq.read_table(os.path.join(cdm_data_path, CONCEPT_ANCESTOR))
+    concept_ancestor = concept_ancestor.join(ingredients, keys=["ancestor_concept_id"], right_keys=["concept_id"], join_type = "inner")
+    mapping = pd.DataFrame(concept_ancestor.to_pandas())
+    mapping.rename(columns={"ancestor_concept_id": "ingredient_concept_id", "descendant_concept_id": "drug_concept_id"}, inplace=True)
+    mapping.set_index("drug_concept_id", drop=False, inplace=True)
+    return mapping

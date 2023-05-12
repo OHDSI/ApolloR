@@ -28,6 +28,10 @@ class AbstractCdmDataProcessor(ABC):
     GeneralPretrainedModelTools R package. It divides the partitions over various threads,
     and calls the abstract _process_person() function with all data for a single person, for
     each person in the data.
+
+    Args:
+        cdm_data_path: The path where the CDM Parquet files are saved (using the GeneralPretrainModelTools packages).
+        max_cores: The maximum number of CPU cores to use. If set to -1, all multihreading code will be bypassed for easier debugging.
     """
 
     def __init__(self, cdm_data_path: str, max_cores: int = -1):
@@ -149,6 +153,10 @@ class AbstractToParquetCdmDataProcessor(AbstractCdmDataProcessor):
     Extends the AbstractCdmDataProcessor by providing a private _output DataFrame list that
     can be appended to after processing each patient. After a partition is finished, the
     content of _output is written to a Parquet file.
+
+    Args:
+        cdm_data_path: The path where the CDM Parquet files are saved (using the GeneralPretrainModelTools packages).
+        max_cores: The maximum number of CPU cores to use. If set to -1, all multihreading code will be bypassed for easier debugging.
     """
 
     def __init__(self, cdm_data_path: str, output_path: str, max_cores: int = -1):
