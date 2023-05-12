@@ -23,11 +23,13 @@ class ExampleCdmDataProcessor(AbstractToParquetCdmDataProcessor):
     def _process_observation_period(self, observation_period_id: int, cdm_tables: Dict[str, pd.DataFrame]):
         date_of_birth = cpu.get_date_of_birth(person=cdm_tables[PERSON])
         for visit_group in cpu.group_by_visit(cdm_tables=cdm_tables, link_by_date=True, create_missing_visits=True, missing_visit_concept_id=0):
-            event_table = cpu.union_domain_tables(visit_group.cdm_tables)
-            event_table.sort_values([START_DATE, CONCEPT_ID], ascending=True, inplace=True)
-            age_in_weeks = event_table[START_DATE].apply(lambda x: math.floor((x-date_of_birth).days / 7))
-            self._output.append(event_table)
-            print(len(event_table))
+            if True == False:
+                print(len(visit_group.cdm_tables))
+            #event_table = cpu.union_domain_tables(visit_group.cdm_tables)
+            #event_table.sort_values([START_DATE, CONCEPT_ID], ascending=True, inplace=True)
+            #age_in_weeks = event_table[START_DATE].apply(lambda x: math.floor((x-date_of_birth).days / 7))
+            #self._output.append(event_table)
+            #print(len(event_table))
 
         
         #print(age_in_weeks)
@@ -38,7 +40,7 @@ if __name__ == "__main__":
     
     my_cdm_data_processor = ExampleCdmDataProcessor(
         cdm_data_path="d:/GPM_MDCD",
-        max_cores=1,
+        max_cores=10,
         output_path="d:/GPM_MDCD/person_sequence",
     )
     my_cdm_data_processor.process_cdm_data()

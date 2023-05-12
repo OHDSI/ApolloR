@@ -113,6 +113,8 @@ def union_domain_tables(cdm_tables: Dict[str, pd.DataFrame]) -> pd.DataFrame:
     for table_name in DOMAIN_TABLES:
         if table_name in cdm_tables:
             result.append(normalize_domain_table(cdm_tables[table_name], table_name))
+    if len(result) == 0:
+        print("check")
     return pd.concat(result, ignore_index=True)
 
 
@@ -168,8 +170,11 @@ def group_by_visit(
     Yields:
         A list of type VisitData, sorted by visit start date.
     """
-    visits = cdm_tables[VISIT_OCCURRENCE]
-    visits["visit_index"] = list(range(len(visits)))
+    if (VISIT_OCCURRENCE in cdm_tables):
+        visits = cdm_tables[VISIT_OCCURRENCE]
+    else:
+        visits = pd.DataFrame()
+    visit_indices = list(range(len(visits)))
     visit_datas = [VisitData(visits.iloc[i]) for i in range(len(visits))]
     for table_name in DOMAIN_TABLES:
         if table_name in cdm_tables:
@@ -177,81 +182,89 @@ def group_by_visit(
             if len(cdm_table) == 0:
                 continue
             start_date_field = START_DATE_FIELDS[table_name]
-            if link_by_date:
-                if VISIT_OCCURRENCE_ID in cdm_table:
-                    cdm_table["visit_index"] = np.piecewise(
-                        [0] * len(cdm_table),
-                        [
-                            (
-                                cdm_table[VISIT_OCCURRENCE_ID].values
-                                == visit_occurrence_id
-                            )
-                            | ((cdm_table[start_date_field].values >= start_date)
-                            & (cdm_table[start_date_field].values <= end_date))
-                            for visit_occurrence_id, start_date, end_date in zip(
-                                visits[VISIT_OCCURRENCE_ID].values,
-                                visits[VISIT_START_DATE].values,
-                                visits[VISIT_END_DATE].values,
-                            )
-                        ],
-                        np.append(visits["visit_index"].values, -1),
-                    )
-                else:
-                    cdm_table["visit_index"] = np.piecewise(
-                        [0] * len(cdm_table),
-                        [
-                            (cdm_table[start_date_field].values >= start_date)
-                            & (cdm_table[start_date_field].values <= end_date)
-                            for start_date, end_date in zip(
-                                visits[VISIT_START_DATE].values,
-                                visits[VISIT_END_DATE].values,
-                            )
-                        ],
-                        np.append(visits["visit_index"].values, -1),
-                    )
-            elif VISIT_OCCURRENCE_ID in cdm_table:
-                cdm_table["visit_index"] = np.piecewise(
-                    [0] * len(cdm_table),
-                    [
-                        (cdm_table[VISIT_OCCURRENCE_ID].values == visit_occurrence_id)
-                        for visit_occurrence_id in zip(
-                            visits[VISIT_OCCURRENCE_ID].values
+            if (len(visits) == 0):
+                event_visit_index = np.empty(shape=len(cdm_table), dtype=np.int32)
+                event_visit_index.fill(-1)
+            else:
+                if link_by_date:
+                    if VISIT_OCCURRENCE_ID in cdm_table:
+                        #print(cdm_table[VISIT_OCCURRENCE_ID].values)
+                        #print(visits[VISIT_OCCURRENCE_ID].values)
+                        event_visit_index = np.piecewise(
+                            [0] * len(cdm_table),
+                            [
+                                (
+                                    cdm_table[VISIT_OCCURRENCE_ID].values
+                                    == visit_occurrence_id
+                                )
+                                | ((cdm_table[start_date_field].values >= start_date)
+                                & (cdm_table[start_date_field].values <= end_date))
+                                for visit_occurrence_id, start_date, end_date in zip(
+                                    visits[VISIT_OCCURRENCE_ID].values,
+                                    visits[VISIT_START_DATE].values,
+                                    visits[VISIT_END_DATE].values,
+                                )
+                            ],
+                            np.append(visit_indices, -1),
                         )
-                    ],
-                    np.append(visits["visit_index"].values, -1),
-                )
+                    else:
+                        event_visit_index = np.piecewise(
+                            [0] * len(cdm_table),
+                            [
+                                (cdm_table[start_date_field].values >= start_date)
+                                & (cdm_table[start_date_field].values <= end_date)
+                                for start_date, end_date in zip(
+                                    visits[VISIT_START_DATE].values,
+                                    visits[VISIT_END_DATE].values,
+                                )
+                            ],
+                            np.append(visit_indices, -1),
+                        )
+                elif VISIT_OCCURRENCE_ID in cdm_table:
+                    event_visit_index = np.piecewise(
+                        [0] * len(cdm_table),
+                        [
+                            (cdm_table[VISIT_OCCURRENCE_ID].values == visit_occurrence_id)
+                            for visit_occurrence_id in zip(
+                                visits[VISIT_OCCURRENCE_ID].values
+                            )
+                        ],
+                        np.append(visit_indices, -1),
+                    )
             if create_missing_visits:
-                unmapped_events = cdm_table[cdm_table["visit_index"] == -1]
-                if (len(unmapped_events) > 0):
-                    dates = unmapped_events[start_date_field].unique()
-                    person_id = unmapped_events[PERSON_ID].iat[0]
+                idx = event_visit_index == -1
+                if (any(idx)):
+                    dates = cdm_table.loc[idx, start_date_field].unique()
+                    person_id = cdm_table[PERSON_ID].iat[0]
+                    missing_visit_indices = list(range(len(visits), len(visits) + len(dates)))
                     missing_visits = pd.DataFrame(
                         {
                             PERSON_ID: [person_id] * len(dates),
                             VISIT_OCCURRENCE_ID: [np.NAN] * len(dates),
                             VISIT_CONCEPT_ID: [missing_visit_concept_id] * len(dates),
                             VISIT_START_DATE: dates,
-                            VISIT_END_DATE: dates,
-                            "visit_index": list(range(len(visits), len(visits) + len(dates))) 
+                            VISIT_END_DATE: dates
                         }
                     )
-                    unmapped_events["visit_index"] = np.piecewise(
-                        [0] * len(unmapped_events),
+                    event_visit_index[idx] = np.piecewise(
+                        [0] * sum(idx),
                         [
-                            (unmapped_events[start_date_field].values == start_date)
+                            (cdm_table.loc[idx, start_date_field].values == start_date)
                             for start_date in zip(
                                 missing_visits[VISIT_START_DATE].values
                             )
                         ],
-                        missing_visits["visit_index"].values,
+                        missing_visit_indices,
                     )
-                    cdm_table = pd.concat([cdm_table[cdm_table["visit_index"] != -1], unmapped_events])
                     visits = pd.concat([visits, missing_visits])
-                    visit_datas += [VisitData(missing_visits.iloc[i]) for i in missing_visits.index]
+                    visit_indices.extend(missing_visit_indices)
+                    visit_datas += [VisitData(missing_visits.iloc[i]) for i in range(len(missing_visits))]
             else:
-                cdm_table = cdm_table[cdm_table["visit_index"] != -1]
+                idx = event_visit_index != -1
+                cdm_table = cdm_table[idx]
+                event_visit_index = event_visit_index[idx]
             
-            for visit_index, events in cdm_table.groupby("visit_index"):
+            for visit_index, events in cdm_table.groupby(event_visit_index):
                 visit_datas[visit_index].cdm_tables[table_name] = events 
     visit_datas.sort(
         key=lambda x: x.visit_start_date
