@@ -22,6 +22,7 @@ START_DATE_FIELDS = {
     "observation": "observation_date",
     "death": "death_date",
 }
+START_DATE = "start_date"
 DOMAIN_TABLES = [
     "condition_occurrence",
     "drug_exposure",
@@ -71,15 +72,30 @@ VISIT_END_DATE = "visit_end_date"
 VISIT_CONCEPT_ID = "visit_concept_id"
 CONCEPT = "concept"
 CONCEPT_ANCESTOR = "concept_ancestor"
+CONCEPT_RELATIONSHIP = "concept_relationship"
+CLASS_IDS_3_DIGITS = [
+    "3-char nonbill code",
+    "3-dig nonbill code",
+    "3-char billing code",
+    "3-dig billing code",
+    "3-dig billing E code",
+    "3-dig billing V code",
+    "3-dig nonbill E code",
+    "3-dig nonbill V code",
+]
 
 
 def call_per_observation_period(
     cdm_tables: Dict[str, pd.DataFrame],
-    function: Callable[[int, Dict[str, pd.DataFrame]], None],
+    function: Callable[[pd.Series, Dict[str, pd.DataFrame]], None],
 ):
     """
     Calls the provided function for each observation period. CDM tables are filtered to only those events
-    that fall in the observation period. he function should have two arguments: the observation_period_id,
+    that fall in the observation period. 
+
+    Args:
+        cdm_tables: A dictionary, mapping from CDM table name to table data.
+        function: The function to call for each observation period.The function should have two arguments: the observation_period (Series),
     and a dictionary of CDM tables.
     """
     for index, observation_period in cdm_tables[OBSERVATION_PERIOD].iterrows():
@@ -96,7 +112,7 @@ def call_per_observation_period(
                     & (start_dates <= observation_period_end_date)
                 ]
             new_cdm_tables[table_name] = table
-        function(observation_period[OBSERVATION_PERIOD_ID], new_cdm_tables)
+        function(observation_period, new_cdm_tables)
 
 
 def normalize_domain_table(table: pd.DataFrame, table_name: str) -> pd.DataFrame:
@@ -112,27 +128,30 @@ def normalize_domain_table(table: pd.DataFrame, table_name: str) -> pd.DataFrame
 def union_domain_tables(cdm_tables: Dict[str, pd.DataFrame]) -> pd.DataFrame:
     """
     Combines all domain tables into a single table. For this, column names will be normalized first.
+
+    Args:
+        cdm_tables: A dictionary, mapping from CDM table name to table data.
     """
     result = []
     for table_name in DOMAIN_TABLES:
         if table_name in cdm_tables:
             result.append(normalize_domain_table(cdm_tables[table_name], table_name))
-    if len(result) == 0:
-        print("check")
-    return pd.concat(result, ignore_index=True)
+    if (len(result) == 0):
+        return pd.DataFrame({CONCEPT_ID: [], START_DATE: []})
+    else:
+        return pd.concat(result, ignore_index=True)
 
 
-def get_date_of_birth(person: pd.DataFrame) -> dt.date:
+def get_date_of_birth(person: pd.Series) -> dt.date:
     """
-    Computes a date of birth from a single person entry
+    Computes a date of birth from a person entry
+
+    Args:
+        person: A single row from the person table.
     """
-    if person.shape[0] != 1:
-        raise Exception(
-            f"Expecting person to have 1 row, but found {person.shape[0]} rows"
-        )
-    year = person[YEAR_OF_BIRTH].iat[0]
-    month = person[MONTH_OF_BIRTH].iat[0]
-    day = person[DAY_OF_BIRTH].iat[0]
+    year = person[YEAR_OF_BIRTH]
+    month = person[MONTH_OF_BIRTH]
+    day = person[DAY_OF_BIRTH]
     if pd.isna(month):
         month = 1
     if pd.isna(day):
@@ -144,6 +163,7 @@ class VisitData:
     """
     Class for grouping all CDM data for one visit.
     """
+
     visit: pd.Series
     visit_start_date: dt.date
     cdm_tables: Dict[str, pd.DataFrame]
@@ -152,6 +172,7 @@ class VisitData:
         self.visit = visit
         self.cdm_tables = {}
         self.visit_start_date = visit[VISIT_START_DATE]
+
 
 def group_by_visit(
     cdm_tables: Dict[str, pd.DataFrame],
@@ -163,6 +184,7 @@ def group_by_visit(
     Groups events by visit.
 
     Args:
+        cdm_tables: A dictionary, mapping from CDM table name to table data.
         link_by_date: If true, events not linked to an existing visit by visit_occurrence_id
                       will be linked to an existing visit if the event date falls within the
                       visit start and end date.
@@ -174,7 +196,7 @@ def group_by_visit(
     Yields:
         A list of type VisitData, sorted by visit start date.
     """
-    if (VISIT_OCCURRENCE in cdm_tables):
+    if VISIT_OCCURRENCE in cdm_tables:
         visits = cdm_tables[VISIT_OCCURRENCE]
     else:
         visits = pd.DataFrame()
@@ -186,14 +208,14 @@ def group_by_visit(
             if len(cdm_table) == 0:
                 continue
             start_date_field = START_DATE_FIELDS[table_name]
-            if (len(visits) == 0):
+            if len(visits) == 0:
                 event_visit_index = np.empty(shape=len(cdm_table), dtype=np.int32)
                 event_visit_index.fill(-1)
             else:
                 if link_by_date:
                     if VISIT_OCCURRENCE_ID in cdm_table:
-                        #print(cdm_table[VISIT_OCCURRENCE_ID].values)
-                        #print(visits[VISIT_OCCURRENCE_ID].values)
+                        # print(cdm_table[VISIT_OCCURRENCE_ID].values)
+                        # print(visits[VISIT_OCCURRENCE_ID].values)
                         event_visit_index = np.piecewise(
                             [0] * len(cdm_table),
                             [
@@ -201,8 +223,10 @@ def group_by_visit(
                                     cdm_table[VISIT_OCCURRENCE_ID].values
                                     == visit_occurrence_id
                                 )
-                                | ((cdm_table[start_date_field].values >= start_date)
-                                & (cdm_table[start_date_field].values <= end_date))
+                                | (
+                                    (cdm_table[start_date_field].values >= start_date)
+                                    & (cdm_table[start_date_field].values <= end_date)
+                                )
                                 for visit_occurrence_id, start_date, end_date in zip(
                                     visits[VISIT_OCCURRENCE_ID].values,
                                     visits[VISIT_START_DATE].values,
@@ -228,7 +252,10 @@ def group_by_visit(
                     event_visit_index = np.piecewise(
                         [0] * len(cdm_table),
                         [
-                            (cdm_table[VISIT_OCCURRENCE_ID].values == visit_occurrence_id)
+                            (
+                                cdm_table[VISIT_OCCURRENCE_ID].values
+                                == visit_occurrence_id
+                            )
                             for visit_occurrence_id in zip(
                                 visits[VISIT_OCCURRENCE_ID].values
                             )
@@ -237,17 +264,19 @@ def group_by_visit(
                     )
             if create_missing_visits:
                 idx = event_visit_index == -1
-                if (any(idx)):
+                if any(idx):
                     dates = cdm_table.loc[idx, start_date_field].unique()
                     person_id = cdm_table[PERSON_ID].iat[0]
-                    missing_visit_indices = list(range(len(visits), len(visits) + len(dates)))
+                    missing_visit_indices = list(
+                        range(len(visits), len(visits) + len(dates))
+                    )
                     missing_visits = pd.DataFrame(
                         {
                             PERSON_ID: [person_id] * len(dates),
                             VISIT_OCCURRENCE_ID: [np.NAN] * len(dates),
                             VISIT_CONCEPT_ID: [missing_visit_concept_id] * len(dates),
                             VISIT_START_DATE: dates,
-                            VISIT_END_DATE: dates
+                            VISIT_END_DATE: dates,
                         }
                     )
                     event_visit_index[idx] = np.piecewise(
@@ -262,18 +291,20 @@ def group_by_visit(
                     )
                     visits = pd.concat([visits, missing_visits])
                     visit_indices.extend(missing_visit_indices)
-                    visit_datas += [VisitData(missing_visits.iloc[i]) for i in range(len(missing_visits))]
+                    visit_datas += [
+                        VisitData(missing_visits.iloc[i])
+                        for i in range(len(missing_visits))
+                    ]
             else:
                 idx = event_visit_index != -1
                 cdm_table = cdm_table[idx]
                 event_visit_index = event_visit_index[idx]
-            
+
             for visit_index, events in cdm_table.groupby(event_visit_index):
-                visit_datas[visit_index].cdm_tables[table_name] = events 
-    visit_datas.sort(
-        key=lambda x: x.visit_start_date
-    )
+                visit_datas[visit_index].cdm_tables[table_name] = events
+    visit_datas.sort(key=lambda x: x.visit_start_date)
     return visit_datas
+
 
 def load_mapping_to_ingredients(cdm_data_path: str) -> pd.DataFrame:
     """
@@ -284,10 +315,25 @@ def load_mapping_to_ingredients(cdm_data_path: str) -> pd.DataFrame:
     Yields:
         A DataFrame with two columns: "drug_concept_id" and "ingredient_concept_id". An index is placed on drug_concept_id for fast joining.
     """
-    ingredients = pq.read_table(os.path.join(cdm_data_path, CONCEPT), columns=["concept_id"], filters=[("concept_class_id", "==", "Ingredient")])
+    ingredients = pq.read_table(
+        os.path.join(cdm_data_path, CONCEPT),
+        columns=["concept_id"],
+        filters=[("concept_class_id", "==", "Ingredient")],
+    )
     concept_ancestor = pq.read_table(os.path.join(cdm_data_path, CONCEPT_ANCESTOR))
-    concept_ancestor = concept_ancestor.join(ingredients, keys=["ancestor_concept_id"], right_keys=["concept_id"], join_type = "inner")
+    concept_ancestor = concept_ancestor.join(
+        ingredients,
+        keys=["ancestor_concept_id"],
+        right_keys=["concept_id"],
+        join_type="inner",
+    )
     mapping = pd.DataFrame(concept_ancestor.to_pandas())
-    mapping.rename(columns={"ancestor_concept_id": "ingredient_concept_id", "descendant_concept_id": "drug_concept_id"}, inplace=True)
+    mapping.rename(
+        columns={
+            "ancestor_concept_id": "ingredient_concept_id",
+            "descendant_concept_id": "drug_concept_id",
+        },
+        inplace=True,
+    )
     mapping.set_index("drug_concept_id", drop=False, inplace=True)
     return mapping

@@ -293,6 +293,16 @@ executeExtractDataJob <- function(job,
               job$partition
       )
     )
+  } else if (job$table == "concept_relationship") {
+    sql <- paste0(
+      sql,
+      sprintf("\nINNER JOIN %s.%s\n  ON concept_relationship.concept_id_1 = %s.concept_id\nWHERE partition_id = %d\nORDER BY concept_relationship.concept_id_1;",
+              workDatabaseSchema,
+              conceptIdPartitionTable,
+              conceptIdPartitionTable,
+              job$partition
+      )
+    )
   } else {
     sql <- paste0(
       sql,

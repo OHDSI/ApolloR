@@ -49,3 +49,6 @@ concept,concept_name,no
 concept,concept_class_id,no
 concept_ancestor,ancestor_concept_id,no
 concept_ancestor,descendant_concept_id,no
+concept_relationship,concept_id_1
+concept_relationship,concept_id_2
+concept_relationship,relationship_id

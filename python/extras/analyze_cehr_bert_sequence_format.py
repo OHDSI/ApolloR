@@ -9,4 +9,4 @@ x = pfile.to_pandas()
 print(x.columns)
 for column in x.columns:
   print(f"column: {column}")
-  print(x[column][1])
+  print(x[column].iat[0])

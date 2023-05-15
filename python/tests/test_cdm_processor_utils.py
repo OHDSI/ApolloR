@@ -5,7 +5,7 @@ import pytest
 import pandas as pd
 import numpy as np
 
-import cdm_processor_utils as cpu
+import cdm_processing.cdm_processor_utils as cpu
 
 
 @pytest.fixture
@@ -81,7 +81,7 @@ def cdm_tables() -> Dict[str, pd.DataFrame]:
 
 list_of_objects: List[Any] = []
 
-def add_to_list(observation_period_id: int, object: Dict[str, pd.DataFrame]):
+def add_to_list(observation_period: pd.Series, object: Dict[str, pd.DataFrame]):
     list_of_objects.append(object)
 
 def test_call_per_observation_period(cdm_tables: Dict[str, pd.DataFrame]):
@@ -103,37 +103,37 @@ def test_union_domain_tables(cdm_tables: Dict[str, pd.DataFrame]):
     assert record["concept_id"] == 4306655
 
 def test_get_date_of_birth():
-    person = pd.DataFrame(
+    person = pd.Series(
         {
-            "person_id": [1],
-            "year_of_birth": [1970],
-            "month_of_birth": [5],
-            "day_of_birth": [7],
-            "gender_concept_id": [8507],
+            "person_id": 1,
+            "year_of_birth": 1970,
+            "month_of_birth": 5,
+            "day_of_birth": 7,
+            "gender_concept_id": 8507,
         }
     )
     dob = cpu.get_date_of_birth(person)
     assert dob == dt.datetime(1970, 5, 7).date()
 
-    person = pd.DataFrame(
+    person = pd.Series(
         {
-            "person_id": [1],
-            "year_of_birth": [1980],
-            "month_of_birth": [4],
-            "day_of_birth": [np.NAN],
-            "gender_concept_id": [8507],
+            "person_id": 1,
+            "year_of_birth": 1980,
+            "month_of_birth": 4,
+            "day_of_birth": np.NAN,
+            "gender_concept_id": 8507,
         }
     )
     dob = cpu.get_date_of_birth(person)
     assert dob == dt.datetime(1980, 4, 1).date()
 
-    person = pd.DataFrame(
+    person = pd.Series(
         {
-            "person_id": [1],
-            "year_of_birth": [1990],
-            "month_of_birth": [np.NAN],
-            "day_of_birth": [np.NAN],
-            "gender_concept_id": [8507],
+            "person_id": 1,
+            "year_of_birth": 1990,
+            "month_of_birth": np.NAN,
+            "day_of_birth": np.NAN,
+            "gender_concept_id": 8507,
         }
     )
     dob = cpu.get_date_of_birth(person)
