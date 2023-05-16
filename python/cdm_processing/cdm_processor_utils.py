@@ -178,11 +178,17 @@ class VisitData:
     visit: pd.Series
     visit_start_date: dt.date
     cdm_tables: Dict[str, pd.DataFrame]
+    mapped_by_id: int
+    mapped_by_date: int
+    mapped_to_new_visit: int
 
     def __init__(self, visit: pd.Series):
         self.visit = visit
         self.cdm_tables = {}
         self.visit_start_date = visit[VISIT_START_DATE]
+        self.mapped_by_id = 0
+        self.mapped_by_date = 0
+        self.mapped_to_new_visit = 0
 
 
 def group_by_visit(
@@ -223,41 +229,7 @@ def group_by_visit(
                 event_visit_index = np.empty(shape=len(cdm_table), dtype=np.int32)
                 event_visit_index.fill(-1)
             else:
-                if link_by_date:
-                    if VISIT_OCCURRENCE_ID in cdm_table:
-                        event_visit_index = np.piecewise(
-                            np.zeros(len(cdm_table), dtype=int),
-                            [
-                                (
-                                        cdm_table[VISIT_OCCURRENCE_ID].values
-                                        == visit_occurrence_id
-                                )
-                                | (
-                                        (cdm_table[start_date_field].values >= start_date)
-                                        & (cdm_table[start_date_field].values <= end_date)
-                                )
-                                for visit_occurrence_id, start_date, end_date in zip(
-                                    visits[VISIT_OCCURRENCE_ID].values,
-                                    visits[VISIT_START_DATE].values,
-                                    visits[VISIT_END_DATE].values,
-                                )
-                            ],
-                            np.append(visit_indices, -1),
-                        )
-                    else:
-                        event_visit_index = np.piecewise(
-                            np.zeros(len(cdm_table), dtype=int),
-                            [
-                                (cdm_table[start_date_field].values >= start_date)
-                                & (cdm_table[start_date_field].values <= end_date)
-                                for start_date, end_date in zip(
-                                    visits[VISIT_START_DATE].values,
-                                    visits[VISIT_END_DATE].values,
-                                )
-                            ],
-                            np.append(visit_indices, -1),
-                        )
-                elif VISIT_OCCURRENCE_ID in cdm_table:
+                if VISIT_OCCURRENCE_ID in cdm_table:
                     event_visit_index = np.piecewise(
                         np.zeros(len(cdm_table), dtype=int),
                         [
@@ -271,9 +243,33 @@ def group_by_visit(
                         ],
                         np.append(visit_indices, -1),
                     )
+                    index, count = np.unique(event_visit_index, return_counts=True)
+                    for i in range(len(index)):
+                        if index[i] != -1:
+                            visit_datas[index[i]].mapped_by_id += count[i]
                 else:
                     event_visit_index = np.empty(shape=len(cdm_table), dtype=np.int32)
                     event_visit_index.fill(-1)
+
+                if link_by_date:
+                    idx = event_visit_index == -1
+                    if any(idx):
+                        event_visit_index[idx] = np.piecewise(
+                            np.zeros(sum(idx), dtype=int),
+                            [
+                                (cdm_table.loc[idx, start_date_field].values >= start_date)
+                                & (cdm_table.loc[idx, start_date_field].values <= end_date)
+                                for start_date, end_date in zip(
+                                    visits[VISIT_START_DATE].values,
+                                    visits[VISIT_END_DATE].values,
+                                )
+                            ],
+                            np.append(visit_indices, -1),
+                        )
+                        index, count = np.unique(event_visit_index[idx], return_counts=True)
+                        for i in range(len(index)):
+                            if index[i] != -1:
+                                visit_datas[index[i]].mapped_by_date += count[i]
             if create_missing_visits:
                 idx = event_visit_index == -1
                 if any(idx):
@@ -307,6 +303,9 @@ def group_by_visit(
                         VisitData(missing_visits.iloc[i])
                         for i in range(len(missing_visits))
                     ]
+                    index, count = np.unique(missing_visit_indices, return_counts=True)
+                    for i in range(len(index)):
+                            visit_datas[index[i]].mapped_to_new_visit += count[i]
             else:
                 idx = event_visit_index != -1
                 cdm_table = cdm_table[idx]
