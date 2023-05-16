@@ -86,8 +86,8 @@ CLASS_IDS_3_DIGITS = [
 
 
 def call_per_observation_period(
-    cdm_tables: Dict[str, pd.DataFrame],
-    function: Callable[[pd.Series, Dict[str, pd.DataFrame]], None],
+        cdm_tables: Dict[str, pd.DataFrame],
+        function: Callable[[pd.Series, Dict[str, pd.DataFrame]], None],
 ):
     """
     Calls the provided function for each observation period. CDM tables are filtered to only those events
@@ -95,7 +95,8 @@ def call_per_observation_period(
 
     Args:
         cdm_tables: A dictionary, mapping from CDM table name to table data.
-        function: The function to call for each observation period.The function should have two arguments: the observation_period (Series),
+        function: The function to call for each observation period.The function should have two arguments:
+                  the observation_period (Series),
     and a dictionary of CDM tables.
     """
     for index, observation_period in cdm_tables[OBSERVATION_PERIOD].iterrows():
@@ -110,33 +111,12 @@ def call_per_observation_period(
                 table = table[
                     (start_dates >= observation_period_start_date)
                     & (start_dates <= observation_period_end_date)
-                ]
+                    ]
             new_cdm_tables[table_name] = table
         function(observation_period, new_cdm_tables)
 
 
-def normalize_domain_table(table: pd.DataFrame, table_name: str, include_person_id = False) -> pd.DataFrame:
-    columns_to_select = COLUMNS_TO_SELECT[table_name]
-    # Faster to select columns one at a time, and concat, than it is to select multiple columns at once:
-    columns = []
-    # Death has no concept ID field, but seems important to keep so assigning standard concept ID for 'Death'.
-    if table_name == DEATH:
-        columns.append(pd.Series([DEATH_CONCEPT_ID] * len(table)))
-        #  Reset index or else concept ID and start date will be in different rows:
-        table.reset_index(drop=True, inplace=True)
-    for columnName in columns_to_select:
-        columns.append(table[columnName])
-    if include_person_id:
-        columns.append(table[PERSON_ID])
-        new_column_names = [CONCEPT_ID, START_DATE, PERSON_ID]
-    else:
-        new_column_names = [CONCEPT_ID, START_DATE]
-    table = pd.concat(columns, axis=1, ignore_index=True)
-    table.columns = new_column_names
-    return table
-
-
-def union_domain_tables(cdm_tables: Dict[str, pd.DataFrame], include_person_id = False) -> pd.DataFrame:
+def union_domain_tables(cdm_tables: Dict[str, pd.DataFrame], include_person_id=False) -> pd.DataFrame:
     """
     Combines all domain tables into a single table. For this, column names will be normalized first.
     Entries in the death table will automatically be assigned a concept ID (4306655).
@@ -145,17 +125,35 @@ def union_domain_tables(cdm_tables: Dict[str, pd.DataFrame], include_person_id =
         cdm_tables: A dictionary, mapping from CDM table name to table data.
         include_person_id: Include the person_id column in the results?
     """
-    result = []
+    if include_person_id:
+        columns = [[], [], []]
+        column_names = [CONCEPT_ID, START_DATE, PERSON_ID]
+    else:
+        columns = [[], []]
+        column_names = [CONCEPT_ID, START_DATE]
     for table_name in DOMAIN_TABLES:
         if table_name in cdm_tables:
-            result.append(normalize_domain_table(cdm_tables[table_name], table_name, include_person_id))
-    if len(result) == 0:
+            table = cdm_tables[table_name]
+            table.reset_index(drop=True, inplace=True)
+            columns_to_select = COLUMNS_TO_SELECT[table_name]
+            if table_name == DEATH:
+                columns[0].append(pd.Series([DEATH_CONCEPT_ID] * len(table)))
+                columns[1].append(table[columns_to_select[0]])
+            else:
+                columns[0].append(table[columns_to_select[0]])
+                columns[1].append(table[columns_to_select[1]])
+            if include_person_id:
+                columns[2].append(table[PERSON_ID])
+    if len(columns[0]) == 0:
         if include_person_id:
             return pd.DataFrame({CONCEPT_ID: [], START_DATE: [], PERSON_ID: []})
         else:
             return pd.DataFrame({CONCEPT_ID: [], START_DATE: []})
     else:
-        return pd.concat(result, ignore_index=True)
+        result = pd.concat([pd.concat(columns[0], ignore_index=True), pd.concat(columns[1], ignore_index=True)], axis=1,
+                           ignore_index=True)
+        result.columns = column_names
+        return result
 
 
 def get_date_of_birth(person: pd.Series) -> dt.date:
@@ -191,10 +189,10 @@ class VisitData:
 
 
 def group_by_visit(
-    cdm_tables: Dict[str, pd.DataFrame],
-    link_by_date: bool = True,
-    create_missing_visits: bool = True,
-    missing_visit_concept_id: int = 0,
+        cdm_tables: Dict[str, pd.DataFrame],
+        link_by_date: bool = True,
+        create_missing_visits: bool = True,
+        missing_visit_concept_id: int = 0,
 ) -> List[VisitData]:
     """
     Groups events by visit.
@@ -236,12 +234,12 @@ def group_by_visit(
                             [0] * len(cdm_table),
                             [
                                 (
-                                    cdm_table[VISIT_OCCURRENCE_ID].values
-                                    == visit_occurrence_id
+                                        cdm_table[VISIT_OCCURRENCE_ID].values
+                                        == visit_occurrence_id
                                 )
                                 | (
-                                    (cdm_table[start_date_field].values >= start_date)
-                                    & (cdm_table[start_date_field].values <= end_date)
+                                        (cdm_table[start_date_field].values >= start_date)
+                                        & (cdm_table[start_date_field].values <= end_date)
                                 )
                                 for visit_occurrence_id, start_date, end_date in zip(
                                     visits[VISIT_OCCURRENCE_ID].values,
@@ -269,8 +267,8 @@ def group_by_visit(
                         [0] * len(cdm_table),
                         [
                             (
-                                cdm_table[VISIT_OCCURRENCE_ID].values
-                                == visit_occurrence_id
+                                    cdm_table[VISIT_OCCURRENCE_ID].values
+                                    == visit_occurrence_id
                             )
                             for visit_occurrence_id in zip(
                                 visits[VISIT_OCCURRENCE_ID].values
@@ -278,6 +276,9 @@ def group_by_visit(
                         ],
                         np.append(visit_indices, -1),
                     )
+                else:
+                    event_visit_index = np.empty(shape=len(cdm_table), dtype=np.int32)
+                    event_visit_index.fill(-1)
             if create_missing_visits:
                 idx = event_visit_index == -1
                 if any(idx):
@@ -329,7 +330,8 @@ def load_mapping_to_ingredients(cdm_data_path: str) -> pd.DataFrame:
         cdm_data_path: The path where the CDM Parquet files are saved (using the GeneralPretrainModelTools packages).
 
     Yields:
-        A DataFrame with two columns: "drug_concept_id" and "ingredient_concept_id". An index is placed on drug_concept_id for fast joining.
+        A DataFrame with two columns: "drug_concept_id" and "ingredient_concept_id". An index is placed on
+        drug_concept_id for fast joining.
     """
     ingredients = pq.read_table(
         os.path.join(cdm_data_path, CONCEPT),

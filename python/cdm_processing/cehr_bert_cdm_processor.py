@@ -61,8 +61,6 @@ class CehrBertCdmDataProcessor(AbstractToParquetCdmDataProcessor):
         #        .drop([DRUG_CONCEPT_ID, DRUG_CONCEPT_ID+"_right"], axis=1)
         #        .rename(columns={"ingredient_concept_id": DRUG_CONCEPT_ID})
         #    )
-        if len(self._output) > 1000:
-            return
         date_of_birth = cpu.get_date_of_birth(person=cdm_tables[PERSON].iloc[0])
         concept_ids = []
         visit_segments = []
@@ -79,8 +77,6 @@ class CehrBertCdmDataProcessor(AbstractToParquetCdmDataProcessor):
             create_missing_visits=True,
             missing_visit_concept_id=0,
         ):
-            # if (observation_period[cpu.OBSERVATION_PERIOD_ID] == 8029041070000001 and visit_group.visit[cpu.VISIT_OCCURRENCE_ID] == 8029041070000002):
-            #    print("Check")
             visit_rank += 1
             if visit_rank > 1:
                 # Add interval token:
@@ -147,10 +143,10 @@ if __name__ == "__main__":
     # print(sys.path)
     my_cdm_data_processor = CehrBertCdmDataProcessor(
         cdm_data_path="d:/GPM_MDCD",
-        max_cores=-1,
+        max_cores=10,
         output_path="d:/GPM_MDCD/person_sequence",
     )
-    #my_cdm_data_processor.process_cdm_data()
+    my_cdm_data_processor.process_cdm_data()
     # Profiling code:
-    my_cdm_data_processor._max_cores = -1
-    cProfile.run("my_cdm_data_processor.process_cdm_data()", "../stats")
+    # my_cdm_data_processor._max_cores = -1
+    # cProfile.run("my_cdm_data_processor.process_cdm_data()", "../stats")

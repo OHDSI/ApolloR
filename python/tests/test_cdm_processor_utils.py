@@ -72,17 +72,20 @@ def cdm_tables() -> Dict[str, pd.DataFrame]:
     death["death_date"] = pd.to_datetime(
         death["death_date"]
     )
-    cdm_tables = {"person": person, "visit_occurrence": visit_occurrence,
+    cdm_tables = {"person": person,
                   "observation_period": observation_period,
                   "visit_occurrence": visit_occurrence,
                   "condition_occurrence": condition_occurrence,
                   "death": death}
     return cdm_tables
 
+
 list_of_objects: List[Any] = []
 
-def add_to_list(observation_period: pd.Series, object: Dict[str, pd.DataFrame]):
-    list_of_objects.append(object)
+
+def add_to_list(observation_period: pd.Series, cdm_tables: Dict[str, pd.DataFrame]):
+    list_of_objects.append(cdm_tables)
+
 
 def test_call_per_observation_period(cdm_tables: Dict[str, pd.DataFrame]):
     list_of_objects.clear()
@@ -94,13 +97,15 @@ def test_call_per_observation_period(cdm_tables: Dict[str, pd.DataFrame]):
     assert len(visits) == 0
     visits = list_of_objects[2]["visit_occurrence"]
     assert len(visits) == 1
-    
+
+
 def test_union_domain_tables(cdm_tables: Dict[str, pd.DataFrame]):
     unioned_tables = cpu.union_domain_tables(cdm_tables)
 
     # Last record should be death:
-    record  = unioned_tables.iloc[-1]
+    record = unioned_tables.iloc[-1]
     assert record["concept_id"] == 4306655
+
 
 def test_get_date_of_birth():
     person = pd.Series(
@@ -139,34 +144,35 @@ def test_get_date_of_birth():
     dob = cpu.get_date_of_birth(person)
     assert dob == dt.datetime(1990, 1, 1).date()
 
+
 def test_group_by_visit(cdm_tables: Dict[str, pd.DataFrame]):
     visit_groups = cpu.group_by_visit(cdm_tables, link_by_date=True, create_missing_visits=True)
     assert len(visit_groups) == 5
-    visit_group = visit_groups[0] # First visit in CDM data, linked by ID
+    visit_group = visit_groups[0]  # First visit in CDM data, linked by ID
     assert len(visit_group.cdm_tables["condition_occurrence"]) == 1
     assert visit_group.cdm_tables["condition_occurrence"]["condition_concept_id"].iat[0] == 123
-    visit_group = visit_groups[1] # Second visit in CDM data, linked by date
+    visit_group = visit_groups[1]  # Second visit in CDM data, linked by date
     assert len(visit_group.cdm_tables["condition_occurrence"]) == 1
     assert visit_group.cdm_tables["condition_occurrence"]["condition_concept_id"].iat[0] == 456
-    visit_group = visit_groups[2] # New visit, derived from condition occurrence
+    visit_group = visit_groups[2]  # New visit, derived from condition occurrence
     assert visit_group.visit["visit_concept_id"] == 0
     assert len(visit_group.cdm_tables["condition_occurrence"]) == 1
     assert visit_group.cdm_tables["condition_occurrence"]["condition_concept_id"].iat[0] == 789
-    visit_group = visit_groups[3] # Third visit in CDM data, linked by date
+    visit_group = visit_groups[3]  # Third visit in CDM data, linked by date
     assert "condition_occurrence" not in visit_group.cdm_tables
-    visit_group = visit_groups[4] # New visit, derived from death
+    visit_group = visit_groups[4]  # New visit, derived from death
     assert visit_group.visit["visit_concept_id"] == 0
     assert len(visit_groups[4].cdm_tables["death"]) == 1
 
     visit_groups = cpu.group_by_visit(cdm_tables, link_by_date=True, create_missing_visits=False)
     assert len(visit_groups) == 3
-    visit_group = visit_groups[0] # First visit in CDM data, linked by ID
+    visit_group = visit_groups[0]  # First visit in CDM data, linked by ID
     assert len(visit_group.cdm_tables["condition_occurrence"]) == 1
     assert visit_group.cdm_tables["condition_occurrence"]["condition_concept_id"].iat[0] == 123
-    visit_group = visit_groups[1] # Second visit in CDM data, linked by date
+    visit_group = visit_groups[1]  # Second visit in CDM data, linked by date
     assert len(visit_group.cdm_tables["condition_occurrence"]) == 1
     assert visit_group.cdm_tables["condition_occurrence"]["condition_concept_id"].iat[0] == 456
-    visit_group = visit_groups[2] # Third visit in CDM data, linked by date
+    visit_group = visit_groups[2]  # Third visit in CDM data, linked by date
     assert "condition_occurrence" not in visit_group.cdm_tables
 
     visit_groups = cpu.group_by_visit(cdm_tables, link_by_date=False, create_missing_visits=False)
