@@ -124,35 +124,42 @@ def union_domain_tables(cdm_tables: Dict[str, pd.DataFrame], include_person_id=F
     Args:
         cdm_tables: A dictionary, mapping from CDM table name to table data.
         include_person_id: Include the person_id column in the results?
+
+    Yields:
+        A data frame with a concept_id and a start_date column, and if requested a person_id column. The result will
+        be sorted by start date and then concept ID.
     """
+    # Using numpy arrays for massive boost in speed (compared to pandas data frames):
+    concept_ids = []
+    start_dates = []
     if include_person_id:
-        columns = [[], [], []]
-        column_names = [CONCEPT_ID, START_DATE, PERSON_ID]
-    else:
-        columns = [[], []]
-        column_names = [CONCEPT_ID, START_DATE]
+        person_ids = []
     for table_name in DOMAIN_TABLES:
         if table_name in cdm_tables:
             table = cdm_tables[table_name]
-            table.reset_index(drop=True, inplace=True)
+            # table.reset_index(drop=True, inplace=True)
             columns_to_select = COLUMNS_TO_SELECT[table_name]
             if table_name == DEATH:
-                columns[0].append(pd.Series([DEATH_CONCEPT_ID] * len(table)))
-                columns[1].append(table[columns_to_select[0]])
+                concept_ids.append(np.asarray([DEATH_CONCEPT_ID] * len(table)))
+                start_dates.append(table[columns_to_select[0]].to_numpy())
             else:
-                columns[0].append(table[columns_to_select[0]])
-                columns[1].append(table[columns_to_select[1]])
+                concept_ids.append(table[columns_to_select[0]].to_numpy())
+                start_dates.append(table[columns_to_select[1]].to_numpy())
             if include_person_id:
-                columns[2].append(table[PERSON_ID])
-    if len(columns[0]) == 0:
+                person_ids.append(table[PERSON_ID].to_numpy())
+    if len(concept_ids) == 0:
         if include_person_id:
             return pd.DataFrame({CONCEPT_ID: [], START_DATE: [], PERSON_ID: []})
         else:
             return pd.DataFrame({CONCEPT_ID: [], START_DATE: []})
     else:
-        result = pd.concat([pd.concat(columns[0], ignore_index=True), pd.concat(columns[1], ignore_index=True)], axis=1,
-                           ignore_index=True)
-        result.columns = column_names
+        concept_ids = np.concatenate(concept_ids)
+        start_dates = np.concatenate(start_dates)
+        idx = np.lexsort((concept_ids, start_dates))
+        if include_person_id:
+            result = pd.DataFrame({CONCEPT_ID: concept_ids[idx], START_DATE: start_dates[idx], PERSON_ID: person_ids[idx]})
+        else:
+            result = pd.DataFrame({CONCEPT_ID: concept_ids[idx], START_DATE: start_dates[idx]})
         return result
 
 
@@ -242,10 +249,10 @@ def group_by_visit(
                                         & (cdm_table[start_date_field].values <= end_date)
                                 )
                                 for visit_occurrence_id, start_date, end_date in zip(
-                                    visits[VISIT_OCCURRENCE_ID].values,
-                                    visits[VISIT_START_DATE].values,
-                                    visits[VISIT_END_DATE].values,
-                                )
+                                visits[VISIT_OCCURRENCE_ID].values,
+                                visits[VISIT_START_DATE].values,
+                                visits[VISIT_END_DATE].values,
+                            )
                             ],
                             np.append(visit_indices, -1),
                         )
@@ -256,9 +263,9 @@ def group_by_visit(
                                 (cdm_table[start_date_field].values >= start_date)
                                 & (cdm_table[start_date_field].values <= end_date)
                                 for start_date, end_date in zip(
-                                    visits[VISIT_START_DATE].values,
-                                    visits[VISIT_END_DATE].values,
-                                )
+                                visits[VISIT_START_DATE].values,
+                                visits[VISIT_END_DATE].values,
+                            )
                             ],
                             np.append(visit_indices, -1),
                         )
@@ -271,8 +278,8 @@ def group_by_visit(
                                     == visit_occurrence_id
                             )
                             for visit_occurrence_id in zip(
-                                visits[VISIT_OCCURRENCE_ID].values
-                            )
+                            visits[VISIT_OCCURRENCE_ID].values
+                        )
                         ],
                         np.append(visit_indices, -1),
                     )
@@ -301,8 +308,8 @@ def group_by_visit(
                         [
                             (cdm_table.loc[idx, start_date_field].values == start_date)
                             for start_date in zip(
-                                missing_visits[VISIT_START_DATE].values
-                            )
+                            missing_visits[VISIT_START_DATE].values
+                        )
                         ],
                         missing_visit_indices,
                     )
@@ -353,5 +360,5 @@ def load_mapping_to_ingredients(cdm_data_path: str) -> pd.DataFrame:
         },
         inplace=True,
     )
-    mapping.set_index("drug_concept_id", drop=False, inplace=True)
+    mapping.set_index("drug_concept_id", drop=True, inplace=True)
     return mapping
