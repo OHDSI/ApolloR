@@ -72,17 +72,7 @@ VISIT_END_DATE = "visit_end_date"
 VISIT_CONCEPT_ID = "visit_concept_id"
 CONCEPT = "concept"
 CONCEPT_ANCESTOR = "concept_ancestor"
-CONCEPT_RELATIONSHIP = "concept_relationship"
-CLASS_IDS_3_DIGITS = [
-    "3-char nonbill code",
-    "3-dig nonbill code",
-    "3-char billing code",
-    "3-dig billing code",
-    "3-dig billing E code",
-    "3-dig billing V code",
-    "3-dig nonbill E code",
-    "3-dig nonbill V code",
-]
+DRUG_CONCEPT_ID = "drug_concept_id"
 
 
 def call_per_observation_period(
@@ -132,8 +122,7 @@ def union_domain_tables(cdm_tables: Dict[str, pd.DataFrame], include_person_id=F
     # Using numpy arrays for massive boost in speed (compared to pandas data frames):
     concept_ids = []
     start_dates = []
-    if include_person_id:
-        person_ids = []
+    person_ids = []
     for table_name in DOMAIN_TABLES:
         if table_name in cdm_tables:
             table = cdm_tables[table_name]
@@ -157,7 +146,8 @@ def union_domain_tables(cdm_tables: Dict[str, pd.DataFrame], include_person_id=F
         start_dates = np.concatenate(start_dates)
         idx = np.lexsort((concept_ids, start_dates))
         if include_person_id:
-            result = pd.DataFrame({CONCEPT_ID: concept_ids[idx], START_DATE: start_dates[idx], PERSON_ID: person_ids[idx]})
+            result = pd.DataFrame(
+                {CONCEPT_ID: concept_ids[idx], START_DATE: start_dates[idx], PERSON_ID: person_ids[idx]})
         else:
             result = pd.DataFrame({CONCEPT_ID: concept_ids[idx], START_DATE: start_dates[idx]})
         return result
@@ -235,10 +225,8 @@ def group_by_visit(
             else:
                 if link_by_date:
                     if VISIT_OCCURRENCE_ID in cdm_table:
-                        # print(cdm_table[VISIT_OCCURRENCE_ID].values)
-                        # print(visits[VISIT_OCCURRENCE_ID].values)
                         event_visit_index = np.piecewise(
-                            [0] * len(cdm_table),
+                            np.zeros(len(cdm_table), dtype=int),
                             [
                                 (
                                         cdm_table[VISIT_OCCURRENCE_ID].values
@@ -249,37 +237,37 @@ def group_by_visit(
                                         & (cdm_table[start_date_field].values <= end_date)
                                 )
                                 for visit_occurrence_id, start_date, end_date in zip(
-                                visits[VISIT_OCCURRENCE_ID].values,
-                                visits[VISIT_START_DATE].values,
-                                visits[VISIT_END_DATE].values,
-                            )
+                                    visits[VISIT_OCCURRENCE_ID].values,
+                                    visits[VISIT_START_DATE].values,
+                                    visits[VISIT_END_DATE].values,
+                                )
                             ],
                             np.append(visit_indices, -1),
                         )
                     else:
                         event_visit_index = np.piecewise(
-                            [0] * len(cdm_table),
+                            np.zeros(len(cdm_table), dtype=int),
                             [
                                 (cdm_table[start_date_field].values >= start_date)
                                 & (cdm_table[start_date_field].values <= end_date)
                                 for start_date, end_date in zip(
-                                visits[VISIT_START_DATE].values,
-                                visits[VISIT_END_DATE].values,
-                            )
+                                    visits[VISIT_START_DATE].values,
+                                    visits[VISIT_END_DATE].values,
+                                )
                             ],
                             np.append(visit_indices, -1),
                         )
                 elif VISIT_OCCURRENCE_ID in cdm_table:
                     event_visit_index = np.piecewise(
-                        [0] * len(cdm_table),
+                        np.zeros(len(cdm_table), dtype=int),
                         [
                             (
                                     cdm_table[VISIT_OCCURRENCE_ID].values
                                     == visit_occurrence_id
                             )
                             for visit_occurrence_id in zip(
-                            visits[VISIT_OCCURRENCE_ID].values
-                        )
+                                visits[VISIT_OCCURRENCE_ID].values
+                            )
                         ],
                         np.append(visit_indices, -1),
                     )
@@ -308,8 +296,8 @@ def group_by_visit(
                         [
                             (cdm_table.loc[idx, start_date_field].values == start_date)
                             for start_date in zip(
-                            missing_visits[VISIT_START_DATE].values
-                        )
+                                missing_visits[VISIT_START_DATE].values
+                            )
                         ],
                         missing_visit_indices,
                     )
@@ -336,7 +324,7 @@ def load_mapping_to_ingredients(cdm_data_path: str) -> pd.DataFrame:
     Args:
         cdm_data_path: The path where the CDM Parquet files are saved (using the GeneralPretrainModelTools packages).
 
-    Yields:
+    Returns:
         A DataFrame with two columns: "drug_concept_id" and "ingredient_concept_id". An index is placed on
         drug_concept_id for fast joining.
     """
@@ -362,3 +350,22 @@ def load_mapping_to_ingredients(cdm_data_path: str) -> pd.DataFrame:
     )
     mapping.set_index("drug_concept_id", drop=True, inplace=True)
     return mapping
+
+
+def map_drugs_to_ingredients(drug_exposure: pd.DataFrame, mapping_to_ingredients: pd.DataFrame):
+    """
+    Map drugs to ingredients.
+
+    Args:
+        drug_exposure: A data frame with records from the drug_exposure table.
+        mapping_to_ingredients: The data frame as generated using the load_mapping_to_ingredients() function.
+
+    Returns:
+        The drug_exposure records, with the drug_concept_id replaced with the ingredient concept IDs. Any records that
+        did not have a matching ingredient were removed. Any records that map to multiple ingredients are duplicated.
+    """
+    drug_exposure = drug_exposure\
+        .merge(mapping_to_ingredients, how="inner", left_on=DRUG_CONCEPT_ID, right_index=True)\
+        .drop(DRUG_CONCEPT_ID, axis=1)\
+        .rename(columns={"ingredient_concept_id": DRUG_CONCEPT_ID})
+    return drug_exposure

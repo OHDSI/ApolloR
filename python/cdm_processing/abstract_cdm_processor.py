@@ -115,7 +115,7 @@ class AbstractCdmDataProcessor(ABC):
         self._finish_partition(partition_i)
         print(f"Finished partition {partition_i} of {self._person_partition_count}")
 
-    def _create_table_iterator(self, table_name=str, partition_i=int):
+    def _create_table_iterator(self, table_name: str, partition_i: int):
         """
         At each call returns a DataFrame containing all data from the table for 1 person.
         Assumes the tables are sorted by person ID

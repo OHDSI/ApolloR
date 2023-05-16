@@ -12,7 +12,6 @@ PERSON = "person"
 START_DATE = "start_date"
 CONCEPT_ID = "concept_id"
 DRUG_EXPOSURE = "drug_exposure"
-DRUG_CONCEPT_ID = "drug_concept_id"
 VISIT_START = "VS"
 VISIT_END = "VE"
 EPOCH = dt.date(1970, 1, 1)
@@ -54,13 +53,8 @@ class CehrBertCdmDataProcessor(AbstractToParquetCdmDataProcessor):
         self, observation_period: pd.Series, cdm_tables: Dict[str, pd.DataFrame]
     ):
         # Map drugs to ingredients:
-        if DRUG_EXPOSURE in cdm_tables:
-           cdm_tables[DRUG_EXPOSURE] = (
-               cdm_tables[DRUG_EXPOSURE]
-               .merge(self._drug_mapping, how="inner", left_on=DRUG_CONCEPT_ID, right_index=True)
-               .drop(DRUG_CONCEPT_ID, axis=1)
-               .rename(columns={"ingredient_concept_id": DRUG_CONCEPT_ID})
-           )
+        # if DRUG_EXPOSURE in cdm_tables:
+        #     cdm_tables[DRUG_EXPOSURE] = cpu.map_drugs_to_ingredients(cdm_tables[DRUG_EXPOSURE], self._drug_mapping)
         date_of_birth = cpu.get_date_of_birth(person=cdm_tables[PERSON].iloc[0])
         concept_ids = []
         visit_segments = []
@@ -139,11 +133,11 @@ if __name__ == "__main__":
     # print(os.getcwd())
     # print(sys.path)
     my_cdm_data_processor = CehrBertCdmDataProcessor(
-        cdm_data_path="d:/GPM_MDCD",
-        max_cores=-1,
-        output_path="d:/GPM_MDCD/person_sequence",
+        cdm_data_path="d:/GPM_CCAE",
+        max_cores=15,
+        output_path="d:/GPM_CCAE/person_sequence",
     )
-    #my_cdm_data_processor.process_cdm_data()
+    my_cdm_data_processor.process_cdm_data()
     # Profiling code:
-    my_cdm_data_processor._max_cores = -1
-    cProfile.run("my_cdm_data_processor.process_cdm_data()", "../stats")
+    # my_cdm_data_processor._max_cores = -1
+    # cProfile.run("my_cdm_data_processor.process_cdm_data()", "../stats")
