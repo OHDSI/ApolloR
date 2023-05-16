@@ -35,32 +35,32 @@ DOMAIN_TABLES = [
 DEATH = "death"
 DEATH_CONCEPT_ID = 4306655
 CONCEPT_ID = "concept_id"
-COLUMN_MAPPING = {
-    "condition_occurrence": {
-        "condition_concept_id": "concept_id",
-        "condition_start_date": "start_date",
-    },
-    "drug_exposure": {
-        "drug_concept_id": "concept_id",
-        "drug_exposure_start_date": "start_date",
-    },
-    "procedure_occurrence": {
-        "procedure_concept_id": "concept_id",
-        "procedure_date": "start_date",
-    },
-    "device_exposure": {
-        "device_concept_id": "concept_id",
-        "device_exposure_start_date": "start_date",
-    },
-    "measurement": {
-        "measurement_concept_id": "concept_id",
-        "measurement_date": "start_date",
-    },
-    "observation": {
-        "observation_concept_id": "concept_id",
-        "observation_date": "start_date",
-    },
-    "death": {"death_date": "start_date"},
+COLUMNS_TO_SELECT = {
+    "condition_occurrence": [
+        "condition_concept_id",
+        "condition_start_date",
+    ],
+    "drug_exposure": [
+        "drug_concept_id",
+        "drug_exposure_start_date",
+    ],
+    "procedure_occurrence": [
+        "procedure_concept_id",
+        "procedure_date",
+    ],
+    "device_exposure": [
+        "device_concept_id",
+        "device_exposure_start_date",
+    ],
+    "measurement": [
+        "measurement_concept_id",
+        "measurement_date",
+    ],
+    "observation": [
+        "observation_concept_id",
+        "observation_date",
+    ],
+    "death": ["death_date"],
 }
 YEAR_OF_BIRTH = "year_of_birth"
 MONTH_OF_BIRTH = "month_of_birth"
@@ -115,29 +115,45 @@ def call_per_observation_period(
         function(observation_period, new_cdm_tables)
 
 
-def normalize_domain_table(table: pd.DataFrame, table_name: str) -> pd.DataFrame:
-    mapping = COLUMN_MAPPING[table_name]
-    table = table[list(mapping.keys()) + [PERSON_ID]]
-    table = table.rename(columns=mapping)
+def normalize_domain_table(table: pd.DataFrame, table_name: str, include_person_id = False) -> pd.DataFrame:
+    columns_to_select = COLUMNS_TO_SELECT[table_name]
+    # Faster to select columns one at a time, and concat, than it is to select multiple columns at once:
+    columns = []
     # Death has no concept ID field, but seems important to keep so assigning standard concept ID for 'Death'.
     if table_name == DEATH:
-        table[CONCEPT_ID] = DEATH_CONCEPT_ID
+        columns.append(pd.Series([DEATH_CONCEPT_ID] * len(table)))
+        #  Reset index or else concept ID and start date will be in different rows:
+        table.reset_index(drop=True, inplace=True)
+    for columnName in columns_to_select:
+        columns.append(table[columnName])
+    if include_person_id:
+        columns.append(table[PERSON_ID])
+        new_column_names = [CONCEPT_ID, START_DATE, PERSON_ID]
+    else:
+        new_column_names = [CONCEPT_ID, START_DATE]
+    table = pd.concat(columns, axis=1, ignore_index=True)
+    table.columns = new_column_names
     return table
 
 
-def union_domain_tables(cdm_tables: Dict[str, pd.DataFrame]) -> pd.DataFrame:
+def union_domain_tables(cdm_tables: Dict[str, pd.DataFrame], include_person_id = False) -> pd.DataFrame:
     """
     Combines all domain tables into a single table. For this, column names will be normalized first.
+    Entries in the death table will automatically be assigned a concept ID (4306655).
 
     Args:
         cdm_tables: A dictionary, mapping from CDM table name to table data.
+        include_person_id: Include the person_id column in the results?
     """
     result = []
     for table_name in DOMAIN_TABLES:
         if table_name in cdm_tables:
-            result.append(normalize_domain_table(cdm_tables[table_name], table_name))
-    if (len(result) == 0):
-        return pd.DataFrame({CONCEPT_ID: [], START_DATE: []})
+            result.append(normalize_domain_table(cdm_tables[table_name], table_name, include_person_id))
+    if len(result) == 0:
+        if include_person_id:
+            return pd.DataFrame({CONCEPT_ID: [], START_DATE: [], PERSON_ID: []})
+        else:
+            return pd.DataFrame({CONCEPT_ID: [], START_DATE: []})
     else:
         return pd.concat(result, ignore_index=True)
 

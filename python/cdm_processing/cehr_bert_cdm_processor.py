@@ -1,13 +1,12 @@
-from typing import Dict, List
+from typing import Dict
 import math
 import datetime as dt
 import cProfile
-import os
 
 import pandas as pd
 
-from abstract_cdm_processor import AbstractToParquetCdmDataProcessor
-import cdm_processor_utils as cpu
+from cdm_processing.abstract_cdm_processor import AbstractToParquetCdmDataProcessor
+import cdm_processing.cdm_processor_utils as cpu
 
 PERSON = "person"
 START_DATE = "start_date"
@@ -17,6 +16,7 @@ DRUG_CONCEPT_ID = "drug_concept_id"
 VISIT_START = "VS"
 VISIT_END = "VE"
 EPOCH = dt.date(1970, 1, 1)
+
 
 def _create_interval_token(days: int) -> str:
     if days < 0:
@@ -54,13 +54,15 @@ class CehrBertCdmDataProcessor(AbstractToParquetCdmDataProcessor):
         self, observation_period: pd.Series, cdm_tables: Dict[str, pd.DataFrame]
     ):
         # Map drugs to ingredients:
-        if DRUG_EXPOSURE in cdm_tables:
-            cdm_tables[DRUG_EXPOSURE] = (
-                cdm_tables[DRUG_EXPOSURE]
-                .join(self._drug_mapping, on=DRUG_CONCEPT_ID, how="inner", rsuffix="_right")
-                .drop([DRUG_CONCEPT_ID, DRUG_CONCEPT_ID+"_right"], axis=1)
-                .rename(columns={"ingredient_concept_id": DRUG_CONCEPT_ID})
-            )
+        # if DRUG_EXPOSURE in cdm_tables:
+        #    cdm_tables[DRUG_EXPOSURE] = (
+        #        cdm_tables[DRUG_EXPOSURE]
+        #        .join(self._drug_mapping, on=DRUG_CONCEPT_ID, how="inner", rsuffix="_right")
+        #        .drop([DRUG_CONCEPT_ID, DRUG_CONCEPT_ID+"_right"], axis=1)
+        #        .rename(columns={"ingredient_concept_id": DRUG_CONCEPT_ID})
+        #    )
+        if len(self._output) > 1000:
+            return
         date_of_birth = cpu.get_date_of_birth(person=cdm_tables[PERSON].iloc[0])
         concept_ids = []
         visit_segments = []
@@ -68,7 +70,8 @@ class CehrBertCdmDataProcessor(AbstractToParquetCdmDataProcessor):
         ages = []
         visit_concept_orders = []
         visit_concept_ids = []
-        previous_visit_end_date: dt.date
+        # Init with random date to silence code warning:
+        previous_visit_end_date = dt.date(2000, 1, 1)
         visit_rank = 0
         for visit_group in cpu.group_by_visit(
             cdm_tables=cdm_tables,
@@ -76,6 +79,8 @@ class CehrBertCdmDataProcessor(AbstractToParquetCdmDataProcessor):
             create_missing_visits=True,
             missing_visit_concept_id=0,
         ):
+            # if (observation_period[cpu.OBSERVATION_PERIOD_ID] == 8029041070000001 and visit_group.visit[cpu.VISIT_OCCURRENCE_ID] == 8029041070000002):
+            #    print("Check")
             visit_rank += 1
             if visit_rank > 1:
                 # Add interval token:
@@ -133,18 +138,19 @@ class CehrBertCdmDataProcessor(AbstractToParquetCdmDataProcessor):
                 "num_of_concepts": len(concept_ids),
                 "visit_concept_ids": visit_concept_ids,
             }
-        )
+        ).to_frame().transpose()
         self._output.append(output_row)
 
 
 if __name__ == "__main__":
-    print(os.getcwd())
+    # print(os.getcwd())
+    # print(sys.path)
     my_cdm_data_processor = CehrBertCdmDataProcessor(
         cdm_data_path="d:/GPM_MDCD",
         max_cores=-1,
         output_path="d:/GPM_MDCD/person_sequence",
     )
-    my_cdm_data_processor.process_cdm_data()
+    #my_cdm_data_processor.process_cdm_data()
     # Profiling code:
-    # my_cdm_data_processor._max_cores = -1
-    # cProfile.run("my_cdm_data_processor.process_cdm_data()", "stats")
+    my_cdm_data_processor._max_cores = -1
+    cProfile.run("my_cdm_data_processor.process_cdm_data()", "../stats")

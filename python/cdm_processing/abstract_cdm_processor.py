@@ -66,7 +66,7 @@ class AbstractCdmDataProcessor(ABC):
         self._prepare()
         if (self._max_cores == -1):
             # For profiling, run small set of partitions in main thread:
-            self._person_partition_count = 2
+            self._person_partition_count = 1
             for partition_i in range(self._person_partition_count):
                 self._process_partition(partition_i)
         else:
@@ -111,6 +111,7 @@ class AbstractCdmDataProcessor(ABC):
                     table_person_datas[table_name] = table_person_data
             self._process_person(person_id=person_id, cdm_tables=cdm_tables)
         self._finish_partition(partition_i)
+        print(f"Finished partition {partition_i} of {self._person_partition_count}")
 
     def _create_table_iterator(self, table_name=str, partition_i=int):
         """
@@ -129,7 +130,7 @@ class AbstractCdmDataProcessor(ABC):
         for batch in table.to_batches():
             batch = batch.to_pandas()
             # batch.columns = batch.columns.str.lower()
-            for person_id, group in batch.groupby(PERSON_ID):
+            for person_id, group in batch.groupby(PERSON_ID, as_index= False):
                 if buffer_person_id is None:
                     buffer = group
                     buffer_person_id = person_id
@@ -172,7 +173,7 @@ class AbstractToParquetCdmDataProcessor(AbstractCdmDataProcessor):
         if (len(self._output) > 0):
             file_name = "part{:04d}.parquet".format(partition_i + 1)
             pq.write_table(
-                table=pa.Table.from_pandas(pd.concat(self._output)),
+                table=pa.Table.from_pandas(df=pd.concat(self._output), nthreads=1),
                 where=os.path.join(self._output_path, file_name),
             )
 
