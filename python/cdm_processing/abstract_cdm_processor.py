@@ -2,10 +2,13 @@ from abc import ABC, abstractmethod
 from multiprocessing import Pool
 import os
 from typing import List, Dict
+import logging
 
 import pandas as pd
 import pyarrow.parquet as pq
 import pyarrow as pa
+
+from utils.logger import create_logger
 
 PERSON = "person"
 CDM_TABLES = [
@@ -20,6 +23,7 @@ CDM_TABLES = [
     "death",
 ]
 PERSON_ID = "person_id"
+LOGGER_FILE_NAME = "cdm_processing_log.txt"
 
 
 class AbstractCdmDataProcessor(ABC):
@@ -35,10 +39,15 @@ class AbstractCdmDataProcessor(ABC):
                    easier debugging.
     """
 
-    def __init__(self, cdm_data_path: str, max_cores: int = -1):
+    def __init__(self, cdm_data_path: str, output_path: str, max_cores: int = -1):
         self._cdm_data_path = cdm_data_path
         self._max_cores = max_cores
         self._person_partition_count = 0
+        self._output_path = output_path
+        self._configure_logger()
+
+    def _configure_logger(self):
+        create_logger(os.path.join(self._output_path, LOGGER_FILE_NAME))
 
     @abstractmethod
     def _prepare(self):
@@ -81,9 +90,13 @@ class AbstractCdmDataProcessor(ABC):
         self._person_partition_count = len(
             list(filter(lambda x: ".parquet" in x, files))
         )
+        logging.info("Found %s partitions", self._person_partition_count)
 
     def _process_partition(self, partition_i: int):
         # This function is executed within a thread
+        # Need to re-configure logger because we're in a thread:
+        self._configure_logger()
+        logging.debug("Starting partition %s of %s", partition_i, self._person_partition_count)
         self._prepare_partition(partition_i)
         table_iterators = dict()
         for table_name in CDM_TABLES:
@@ -113,7 +126,7 @@ class AbstractCdmDataProcessor(ABC):
                     table_person_datas[table_name] = table_person_data
             self._process_person(person_id=person_id, cdm_tables=cdm_tables)
         self._finish_partition(partition_i)
-        print(f"Finished partition {partition_i} of {self._person_partition_count}")
+        logging.info("Finished partition %s of %s", partition_i, self._person_partition_count)
 
     def _create_table_iterator(self, table_name: str, partition_i: int):
         """
@@ -165,9 +178,8 @@ class AbstractToParquetCdmDataProcessor(AbstractCdmDataProcessor):
 
     def __init__(self, cdm_data_path: str, output_path: str, max_cores: int = -1):
         super(AbstractToParquetCdmDataProcessor, self).__init__(
-            cdm_data_path=cdm_data_path, max_cores=max_cores
+            cdm_data_path=cdm_data_path, output_path=output_path, max_cores=max_cores
         )
-        self._output_path = output_path
 
     def _prepare_partition(self, partition_i: int):
         self._output: List[pa.DataFrame] = []
@@ -175,6 +187,7 @@ class AbstractToParquetCdmDataProcessor(AbstractCdmDataProcessor):
     def _finish_partition(self, partition_i: int):
         if len(self._output) > 0:
             file_name = "part{:04d}.parquet".format(partition_i + 1)
+            logging.debug("Writing data for partition %s to '%s'", partition_i, file_name)
             pq.write_table(
                 table=pa.Table.from_pandas(df=pd.concat(self._output), nthreads=1),
                 where=os.path.join(self._output_path, file_name),

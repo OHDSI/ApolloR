@@ -2,6 +2,7 @@ from typing import Dict
 import math
 import datetime as dt
 import cProfile
+import logging
 
 import pandas as pd
 
@@ -17,6 +18,35 @@ VISIT_END = "VE"
 EPOCH = dt.date(1970, 1, 1)
 
 
+class ProcessingStatistics:
+    """
+    A class for storing and reporting out some statistics about the CDM processing.
+    """
+
+    def __init__(self):
+        self.mapped_by_id = 0
+        self.mapped_by_date = 0
+        self.mapped_to_new_visit = 0
+        self.existing_visits = 0
+        self.new_visits = 0
+
+    def record_visit_mapping_stats(self, visit_data: cpu.VisitData):
+        self.mapped_by_id += visit_data.mapped_by_id
+        self.mapped_by_date += visit_data.mapped_by_date
+        self.mapped_to_new_visit += visit_data.mapped_to_new_visit
+        if visit_data.new_visit:
+            self.new_visits += 1
+        else:
+            self.existing_visits += 1
+
+    def log_statistics(self, partition_i: int):
+        logging.debug("Partition %s events mapped to visit by ID: %s", partition_i, self.mapped_by_id)
+        logging.debug("Partition %s events mapped to visit by date: %s", partition_i, self.mapped_by_date)
+        logging.debug("Partition %s events mapped to new visits: %s", partition_i, self.mapped_to_new_visit)
+        logging.debug("Partition %s existing visits: %s", partition_i, self.existing_visits)
+        logging.debug("Partition %s newly created visits: %s", partition_i, self.new_visits)
+
+
 def _create_interval_token(days: int) -> str:
     if days < 0:
         return "W-1"
@@ -27,11 +57,11 @@ def _create_interval_token(days: int) -> str:
     return "LT"
 
 
-def days_to_weeks(days: int) -> int:
+def _days_to_weeks(days: int) -> int:
     return math.floor(days / 7)
 
 
-def days_to_months(days: int) -> int:
+def _days_to_months(days: int) -> int:
     return math.floor(days / 30.5)
 
 
@@ -40,9 +70,24 @@ class CehrBertCdmDataProcessor(AbstractToParquetCdmDataProcessor):
     A re-implementation of the processor for CEHR-BERT (https://github.com/cumc-dbmi/cehr-bert)
     """
 
+    def __init__(self, cdm_data_path: str, output_path: str, max_cores: int = -1, map_drugs_to_ingredients: bool = False):
+        super(AbstractToParquetCdmDataProcessor, self).__init__(
+            cdm_data_path=cdm_data_path, output_path=output_path, max_cores=max_cores
+        )
+        self._map_drugs_to_ingredients = map_drugs_to_ingredients
+
     def _prepare(self):
         super()
-        self._drug_mapping = cpu.load_mapping_to_ingredients(self._cdm_data_path)
+        if self._map_drugs_to_ingredients:
+            self._drug_mapping = cpu.load_mapping_to_ingredients(self._cdm_data_path)
+
+    def _prepare_partition(self, partition_i: int):
+        super()._prepare_partition(partition_i=partition_i)
+        self._processing_statistics = ProcessingStatistics()
+
+    def _finish_partition(self, partition_i: int):
+        self._processing_statistics.log_statistics(partition_i=partition_i)
+        super()._finish_partition(partition_i=partition_i)
 
     def _process_person(self, person_id: int, cdm_tables: Dict[str, pd.DataFrame]):
         cpu.call_per_observation_period(
@@ -52,9 +97,8 @@ class CehrBertCdmDataProcessor(AbstractToParquetCdmDataProcessor):
     def _process_observation_period(
         self, observation_period: pd.Series, cdm_tables: Dict[str, pd.DataFrame]
     ):
-        # Map drugs to ingredients:
-        # if DRUG_EXPOSURE in cdm_tables:
-        #     cdm_tables[DRUG_EXPOSURE] = cpu.map_drugs_to_ingredients(cdm_tables[DRUG_EXPOSURE], self._drug_mapping)
+        if self._map_drugs_to_ingredients and DRUG_EXPOSURE in cdm_tables:
+            cdm_tables[DRUG_EXPOSURE] = cpu.map_drugs_to_ingredients(cdm_tables[DRUG_EXPOSURE], self._drug_mapping)
         date_of_birth = cpu.get_date_of_birth(person=cdm_tables[PERSON].iloc[0])
         concept_ids = []
         visit_segments = []
@@ -90,25 +134,26 @@ class CehrBertCdmDataProcessor(AbstractToParquetCdmDataProcessor):
             concept_ids.extend(event_table[CONCEPT_ID].astype(str).to_list())
             concept_ids.append(VISIT_END)
             visit_segments.extend([visit_rank % 2 + 1] * visit_token_len)
-            dates.append(days_to_weeks((visit_group.visit_start_date - EPOCH).days))
+            dates.append(_days_to_weeks((visit_group.visit_start_date - EPOCH).days))
             dates.extend(
-                event_table[START_DATE].apply(lambda x: days_to_weeks((x - EPOCH).days))
+                event_table[START_DATE].apply(lambda x: _days_to_weeks((x - EPOCH).days))
             )
-            dates.append(days_to_weeks((visit_end_date - EPOCH).days))
+            dates.append(_days_to_weeks((visit_end_date - EPOCH).days))
             ages.append(
-                days_to_months((visit_group.visit_start_date - date_of_birth).days)
+                _days_to_months((visit_group.visit_start_date - date_of_birth).days)
             )
             ages.extend(
                 event_table[START_DATE].apply(
-                    lambda x: days_to_months((x - date_of_birth).days)
+                    lambda x: _days_to_months((x - date_of_birth).days)
                 )
             )
-            ages.append(days_to_months((visit_end_date - date_of_birth).days))
+            ages.append(_days_to_months((visit_end_date - date_of_birth).days))
             visit_concept_orders.extend([visit_rank] * visit_token_len)
             visit_concept_ids.extend(
                 [visit_group.visit[cpu.VISIT_CONCEPT_ID]] * visit_token_len
             )
             previous_visit_end_date = visit_end_date
+            self._processing_statistics.record_visit_mapping_stats(visit_group)
 
         orders = list(range(1, len(concept_ids)))
         output_row = pd.Series(
@@ -133,9 +178,9 @@ if __name__ == "__main__":
     # print(os.getcwd())
     # print(sys.path)
     my_cdm_data_processor = CehrBertCdmDataProcessor(
-        cdm_data_path="d:/GPM_CCAE",
+        cdm_data_path="d:/GPM_MDCD",
         max_cores=15,
-        output_path="d:/GPM_CCAE/person_sequence",
+        output_path="d:/GPM_MDCD/person_sequence",
     )
     my_cdm_data_processor.process_cdm_data()
     # Profiling code:

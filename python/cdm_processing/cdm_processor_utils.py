@@ -181,14 +181,16 @@ class VisitData:
     mapped_by_id: int
     mapped_by_date: int
     mapped_to_new_visit: int
+    new_visit: bool
 
-    def __init__(self, visit: pd.Series):
+    def __init__(self, visit: pd.Series, new_visit: bool = False):
         self.visit = visit
         self.cdm_tables = {}
         self.visit_start_date = visit[VISIT_START_DATE]
         self.mapped_by_id = 0
         self.mapped_by_date = 0
         self.mapped_to_new_visit = 0
+        self.new_visit = new_visit
 
 
 def group_by_visit(
@@ -300,7 +302,7 @@ def group_by_visit(
                     visits = pd.concat([visits, missing_visits])
                     visit_indices.extend(missing_visit_indices)
                     visit_datas += [
-                        VisitData(missing_visits.iloc[i])
+                        VisitData(missing_visits.iloc[i], new_visit=True)
                         for i in range(len(missing_visits))
                     ]
                     index, count = np.unique(missing_visit_indices, return_counts=True)
