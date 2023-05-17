@@ -86,8 +86,7 @@ def call_per_observation_period(
     Args:
         cdm_tables: A dictionary, mapping from CDM table name to table data.
         function: The function to call for each observation period.The function should have two arguments:
-                  the observation_period (Series),
-    and a dictionary of CDM tables.
+                  the observation_period (Series), and a dictionary of CDM tables.
     """
     for index, observation_period in cdm_tables[OBSERVATION_PERIOD].iterrows():
         observation_period_start_date = observation_period[
@@ -101,7 +100,7 @@ def call_per_observation_period(
                 table = table[
                     (start_dates >= observation_period_start_date)
                     & (start_dates <= observation_period_end_date)
-                    ]
+                    ].copy()
             new_cdm_tables[table_name] = table
         function(observation_period, new_cdm_tables)
 
@@ -307,7 +306,7 @@ def group_by_visit(
                     ]
                     index, count = np.unique(missing_visit_indices, return_counts=True)
                     for i in range(len(index)):
-                            visit_datas[index[i]].mapped_to_new_visit += count[i]
+                        visit_datas[index[i]].mapped_to_new_visit += count[i]
             else:
                 idx = event_visit_index != -1
                 cdm_table = cdm_table[idx]
@@ -319,7 +318,7 @@ def group_by_visit(
     return visit_datas
 
 
-def load_mapping_to_ingredients(cdm_data_path: str) -> pd.DataFrame:
+def load_mapping_to_ingredients(cdm_data_path: str) -> Dict[int, int]:
     """
     Uses the concept and concept_ancestor table to construct a mapping from drugs to ingredients.
     Args:
@@ -342,31 +341,30 @@ def load_mapping_to_ingredients(cdm_data_path: str) -> pd.DataFrame:
         join_type="inner",
     )
     mapping = pd.DataFrame(concept_ancestor.to_pandas())
-    mapping.rename(
-        columns={
-            "ancestor_concept_id": "ingredient_concept_id",
-            "descendant_concept_id": "drug_concept_id",
-        },
-        inplace=True,
-    )
-    mapping.set_index("drug_concept_id", drop=True, inplace=True)
+    mapping = dict(zip(mapping["descendant_concept_id"], mapping["ancestor_concept_id"]))
     return mapping
 
 
-def map_drugs_to_ingredients(drug_exposure: pd.DataFrame, mapping_to_ingredients: pd.DataFrame):
+def map_drugs_to_ingredients(drug_exposure: pd.DataFrame, mapping_to_ingredients: Dict[int, int]) -> pd.DataFrame:
     """
     Map drugs to ingredients.
 
     Args:
         drug_exposure: A data frame with records from the drug_exposure table.
-        mapping_to_ingredients: The data frame as generated using the load_mapping_to_ingredients() function.
+        mapping_to_ingredients: The dictionary as generated using the load_mapping_to_ingredients() function.
 
     Returns:
         The drug_exposure records, with the drug_concept_id replaced with the ingredient concept IDs. Any records that
         did not have a matching ingredient were removed. Any records that map to multiple ingredients are duplicated.
     """
-    drug_exposure = drug_exposure\
-        .merge(mapping_to_ingredients, how="inner", left_on=DRUG_CONCEPT_ID, right_index=True)\
-        .drop(DRUG_CONCEPT_ID, axis=1)\
-        .rename(columns={"ingredient_concept_id": DRUG_CONCEPT_ID})
+
+    def do_map(x):
+        if x in mapping_to_ingredients:
+            return mapping_to_ingredients[x]
+        else:
+            return -1
+
+    mapped_ids = [do_map(x) for x in drug_exposure[DRUG_CONCEPT_ID]]
+    drug_exposure[DRUG_CONCEPT_ID] = mapped_ids
+    drug_exposure = drug_exposure[drug_exposure[DRUG_CONCEPT_ID] != -1]
     return drug_exposure
