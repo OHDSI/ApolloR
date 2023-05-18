@@ -156,7 +156,7 @@ class AbstractCdmDataProcessor(ABC):
                     buffer_person_id = person_id
                 else:
                     if buffer_person_id == person_id:
-                        buffer = buffer.append(group)
+                        buffer = pd.concat([buffer, group])
                     else:
                         yield buffer
                         buffer = group

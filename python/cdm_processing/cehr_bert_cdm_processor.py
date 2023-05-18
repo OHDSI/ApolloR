@@ -188,9 +188,9 @@ class CehrBertCdmDataProcessor(AbstractToParquetCdmDataProcessor):
 
 if __name__ == "__main__":
     my_cdm_data_processor = CehrBertCdmDataProcessor(
-        cdm_data_path="d:/GPM_CCAE",
+        cdm_data_path="d:/GPM_MDCD",
         max_cores=15,
-        output_path="d:/GPM_CCAE/person_sequence",
+        output_path="d:/GPM_MDCD/person_sequence",
         map_drugs_to_ingredients=True
     )
     my_cdm_data_processor.process_cdm_data()
