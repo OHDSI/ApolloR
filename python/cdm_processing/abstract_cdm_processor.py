@@ -7,6 +7,7 @@ import logging
 import pandas as pd
 import pyarrow.parquet as pq
 import pyarrow as pa
+import tqdm
 
 from utils.logger import create_logger
 
@@ -81,9 +82,13 @@ class AbstractCdmDataProcessor(ABC):
             for partition_i in range(self._person_partition_count):
                 self._process_partition(partition_i)
         else:
-            with Pool(processes=self._max_cores) as pool:
-                pool.map(self._process_partition, range(self._person_partition_count))
-                pool.close()
+            pool = Pool(processes=self._max_cores)
+            tasks = range(self._person_partition_count)
+            work = self._process_partition
+            for _ in tqdm.tqdm(pool.imap_unordered(work, tasks), total=len(tasks)):
+                pass
+            pool.close()
+        logging.info("Finished processing data")
 
     def _get_partition_counts(self):
         files = os.listdir(os.path.join(self._cdm_data_path, PERSON))
@@ -126,7 +131,7 @@ class AbstractCdmDataProcessor(ABC):
                     table_person_datas[table_name] = table_person_data
             self._process_person(person_id=person_id, cdm_tables=cdm_tables)
         self._finish_partition(partition_i)
-        logging.info("Finished partition %s of %s", partition_i, self._person_partition_count)
+        logging.debug("Finished partition %s of %s", partition_i, self._person_partition_count)
 
     def _create_table_iterator(self, table_name: str, partition_i: int):
         """

@@ -73,6 +73,17 @@ VISIT_CONCEPT_ID = "visit_concept_id"
 CONCEPT = "concept"
 CONCEPT_ANCESTOR = "concept_ancestor"
 DRUG_CONCEPT_ID = "drug_concept_id"
+CONCEPT_RELATIONSHIP = "concept_relationship"
+CLASS_IDS_3_DIGITS = [
+    "3-char nonbill code",
+    "3-dig nonbill code",
+    "3-char billing code",
+    "3-dig billing code",
+    "3-dig billing E code",
+    "3-dig billing V code",
+    "3-dig nonbill E code",
+    "3-dig nonbill V code",
+]
 
 
 def call_per_observation_period(
@@ -325,8 +336,7 @@ def load_mapping_to_ingredients(cdm_data_path: str) -> Dict[int, int]:
         cdm_data_path: The path where the CDM Parquet files are saved (using the GeneralPretrainModelTools packages).
 
     Returns:
-        A DataFrame with two columns: "drug_concept_id" and "ingredient_concept_id". An index is placed on
-        drug_concept_id for fast joining.
+        A dictionary from drug concept ID to ingredient concept ID.
     """
     ingredients = pq.read_table(
         os.path.join(cdm_data_path, CONCEPT),
@@ -345,26 +355,70 @@ def load_mapping_to_ingredients(cdm_data_path: str) -> Dict[int, int]:
     return mapping
 
 
-def map_drugs_to_ingredients(drug_exposure: pd.DataFrame, mapping_to_ingredients: Dict[int, int]) -> pd.DataFrame:
+# Note: this does not appear to be a good idea. Eg. 'Brain injury without open intracranial wound' was mapped
+# to 'Disorder of nervous system', which seems a bit too generic.
+def load_mapping_to_3_digit_condition_codes(cdm_data_path: str) -> Dict[int, int]:
+    """
+    Uses the concept and concept_ancestor table to construct a mapping from conditions to concepts equivalent to 3-digit
+    ICD-9 or ICD-10 codes.
+    Args:
+        cdm_data_path: The path where the CDM Parquet files are saved (using the GeneralPretrainModelTools packages).
+
+    Returns:
+        A dictionairy from condition concept ID to concept IDs representing 3-digit ICD-9 and 10 codes.
+    """
+    three_digit_concepts = pq.read_table(
+        os.path.join(cdm_data_path, CONCEPT),
+        columns=["concept_id"],
+        filters=[("concept_class_id", "in", CLASS_IDS_3_DIGITS)],
+    )
+    concept_relationship = pq.read_table(
+        os.path.join(cdm_data_path, CONCEPT_RELATIONSHIP),
+        filters=[("relationship_id", "==", "Maps to")],
+    )
+    concept_relationship = concept_relationship.join(
+        three_digit_concepts,
+        keys=["concept_id_1"],
+        right_keys=["concept_id"],
+        join_type="inner",
+    )
+    concept_ancestor = pq.read_table(os.path.join(cdm_data_path, CONCEPT_ANCESTOR))
+    concept_ancestor = concept_ancestor.join(
+        concept_relationship,
+        keys=["ancestor_concept_id"],
+        right_keys=["concept_id_2"],
+        join_type="inner",
+    )
+    mapping = pd.DataFrame(
+        concept_ancestor.select(
+            ["ancestor_concept_id", "descendant_concept_id"]
+        ).to_pandas()
+    )
+    mapping = dict(zip(mapping["descendant_concept_id"], mapping["ancestor_concept_id"]))
+    return mapping
+
+
+def map_concepts(cdm_table: pd.DataFrame, concept_id_field: str, mapping: Dict[int, int]) -> pd.DataFrame:
     """
     Map drugs to ingredients.
 
     Args:
-        drug_exposure: A data frame with records from the drug_exposure table.
-        mapping_to_ingredients: The dictionary as generated using the load_mapping_to_ingredients() function.
+        cdm_table: A data frame with records from a CDM table.
+        concept_id_field: The name of the concept ID field to be mapped.
+        mapping: The dictionary as generated using one of the load_mapping_ functions.
 
     Returns:
-        The drug_exposure records, with the drug_concept_id replaced with the ingredient concept IDs. Any records that
-        did not have a matching ingredient were removed. Any records that map to multiple ingredients are duplicated.
+        The CDM table, with the concept ID replaced with the mapped concept IDs. Any records that
+        did not have a matching concept were removed. Any records that map to multiple concepts are duplicated.
     """
 
     def do_map(x):
-        if x in mapping_to_ingredients:
-            return mapping_to_ingredients[x]
+        if x in mapping:
+            return mapping[x]
         else:
             return -1
 
-    mapped_ids = [do_map(x) for x in drug_exposure[DRUG_CONCEPT_ID]]
-    drug_exposure[DRUG_CONCEPT_ID] = mapped_ids
-    drug_exposure = drug_exposure[drug_exposure[DRUG_CONCEPT_ID] != -1]
-    return drug_exposure
+    mapped_ids = [do_map(x) for x in cdm_table[concept_id_field]]
+    cdm_table[concept_id_field] = mapped_ids
+    cdm_table = cdm_table[cdm_table[concept_id_field] != -1]
+    return cdm_table

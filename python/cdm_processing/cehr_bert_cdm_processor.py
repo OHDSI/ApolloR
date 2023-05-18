@@ -13,6 +13,7 @@ PERSON = "person"
 START_DATE = "start_date"
 CONCEPT_ID = "concept_id"
 DRUG_EXPOSURE = "drug_exposure"
+DRUG_CONCEPT_ID = "drug_concept_id"
 VISIT_START = "VS"
 VISIT_END = "VE"
 EPOCH = dt.date(1970, 1, 1)
@@ -136,7 +137,9 @@ class CehrBertCdmDataProcessor(AbstractToParquetCdmDataProcessor):
             self, observation_period: pd.Series, cdm_tables: Dict[str, pd.DataFrame]
     ):
         if self._map_drugs_to_ingredients and DRUG_EXPOSURE in cdm_tables:
-            cdm_tables[DRUG_EXPOSURE] = cpu.map_drugs_to_ingredients(cdm_tables[DRUG_EXPOSURE], self._drug_mapping)
+            cdm_tables[DRUG_EXPOSURE] = cpu.map_concepts(cdm_table=cdm_tables[DRUG_EXPOSURE],
+                                                         concept_id_field=DRUG_CONCEPT_ID,
+                                                         mapping=self._drug_mapping)
         date_of_birth = cpu.get_date_of_birth(person=cdm_tables[PERSON].iloc[0])
         output_row = OutputRow()
         output_row.cohort_member_id = observation_period[cpu.OBSERVATION_PERIOD_ID]
@@ -185,9 +188,9 @@ class CehrBertCdmDataProcessor(AbstractToParquetCdmDataProcessor):
 
 if __name__ == "__main__":
     my_cdm_data_processor = CehrBertCdmDataProcessor(
-        cdm_data_path="d:/GPM_MDCD",
+        cdm_data_path="d:/GPM_CCAE",
         max_cores=15,
-        output_path="d:/GPM_MDCD/person_sequence",
+        output_path="d:/GPM_CCAE/person_sequence",
         map_drugs_to_ingredients=True
     )
     my_cdm_data_processor.process_cdm_data()
