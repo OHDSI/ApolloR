@@ -24,7 +24,7 @@ CDM_TABLES = [
     "death",
 ]
 PERSON_ID = "person_id"
-LOGGER_FILE_NAME = "cdm_processing_log.txt"
+LOGGER_FILE_NAME = "_cdm_processing_log.txt" # Start with underscore so ignored by Parquet
 
 
 class AbstractCdmDataProcessor(ABC):

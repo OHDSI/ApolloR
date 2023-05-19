@@ -22,6 +22,16 @@ START_DATE_FIELDS = {
     "observation": "observation_date",
     "death": "death_date",
 }
+CONCEPT_ID_FIELDS = {
+    "visit_occurrence": "visit_concept_id",
+    "condition_occurrence": "condition_concept_id",
+    "drug_exposure": "drug_concept_id",
+    "procedure_occurrence": "procedure_concept_id",
+    "device_exposure": "device_concept_id",
+    "measurement": "measurement_concept_id",
+    "observation": "observation_concept_id",
+    "death": "death_date",
+}
 START_DATE = "start_date"
 DOMAIN_TABLES = [
     "condition_occurrence",
@@ -35,33 +45,6 @@ DOMAIN_TABLES = [
 DEATH = "death"
 DEATH_CONCEPT_ID = 4306655
 CONCEPT_ID = "concept_id"
-COLUMNS_TO_SELECT = {
-    "condition_occurrence": [
-        "condition_concept_id",
-        "condition_start_date",
-    ],
-    "drug_exposure": [
-        "drug_concept_id",
-        "drug_exposure_start_date",
-    ],
-    "procedure_occurrence": [
-        "procedure_concept_id",
-        "procedure_date",
-    ],
-    "device_exposure": [
-        "device_concept_id",
-        "device_exposure_start_date",
-    ],
-    "measurement": [
-        "measurement_concept_id",
-        "measurement_date",
-    ],
-    "observation": [
-        "observation_concept_id",
-        "observation_date",
-    ],
-    "death": ["death_date"],
-}
 YEAR_OF_BIRTH = "year_of_birth"
 MONTH_OF_BIRTH = "month_of_birth"
 DAY_OF_BIRTH = "day_of_birth"
@@ -116,6 +99,31 @@ def call_per_observation_period(
         function(observation_period, new_cdm_tables)
 
 
+def remove_concepts(cdm_tables: Dict[str, pd.DataFrame], concept_ids: List[int] = [0]) -> (Dict[str, pd.DataFrame],
+                                                                                           Dict[str, int]):
+    """
+    Removes rows from the CDM tables where the concept ID is in the list of provided concept IDs.
+    
+    Args:
+        cdm_tables: A dictionary, mapping from CDM table name to table data.
+        concept_ids: A list of concept IDs to remove.
+
+    Returns:
+        The CDM tables with rows containing the concept IDs removed, and a dictionary containing the number of rows
+        removed per table.
+    """
+    new_cdm_tables: Dict[str, pd.DataFrame] = {}
+    removed_row_counts: Dict[str, int] = {}
+    for table_name in cdm_tables:
+        cdm_table = cdm_tables[table_name]
+        if table_name in CONCEPT_ID_FIELDS:
+            idx = [x not in concept_ids for x in cdm_table[CONCEPT_ID_FIELDS[table_name]]]
+            removed_row_counts[table_name] = len(idx) - sum(idx)
+            cdm_table = cdm_table[idx].copy()
+        new_cdm_tables[table_name] = cdm_table
+    return new_cdm_tables, removed_row_counts
+
+
 def union_domain_tables(cdm_tables: Dict[str, pd.DataFrame], include_person_id=False) -> pd.DataFrame:
     """
     Combines all domain tables into a single table. For this, column names will be normalized first.
@@ -125,7 +133,7 @@ def union_domain_tables(cdm_tables: Dict[str, pd.DataFrame], include_person_id=F
         cdm_tables: A dictionary, mapping from CDM table name to table data.
         include_person_id: Include the person_id column in the results?
 
-    Yields:
+    Returns:
         A data frame with a concept_id and a start_date column, and if requested a person_id column. The result will
         be sorted by start date and then concept ID.
     """
@@ -137,13 +145,12 @@ def union_domain_tables(cdm_tables: Dict[str, pd.DataFrame], include_person_id=F
         if table_name in cdm_tables:
             table = cdm_tables[table_name]
             # table.reset_index(drop=True, inplace=True)
-            columns_to_select = COLUMNS_TO_SELECT[table_name]
             if table_name == DEATH:
                 concept_ids.append(np.asarray([DEATH_CONCEPT_ID] * len(table)))
-                start_dates.append(table[columns_to_select[0]].to_numpy())
+                start_dates.append(table[START_DATE_FIELDS[table_name]].to_numpy())
             else:
-                concept_ids.append(table[columns_to_select[0]].to_numpy())
-                start_dates.append(table[columns_to_select[1]].to_numpy())
+                concept_ids.append(table[CONCEPT_ID_FIELDS[table_name]].to_numpy())
+                start_dates.append(table[START_DATE_FIELDS[table_name]].to_numpy())
             if include_person_id:
                 person_ids.append(table[PERSON_ID].to_numpy())
     if len(concept_ids) == 0:
@@ -154,12 +161,14 @@ def union_domain_tables(cdm_tables: Dict[str, pd.DataFrame], include_person_id=F
     else:
         concept_ids = np.concatenate(concept_ids)
         start_dates = np.concatenate(start_dates)
-        idx = np.lexsort((concept_ids, start_dates))
+        sorted_idx = np.lexsort((concept_ids, start_dates))
         if include_person_id:
+            person_ids = np.concatenate(person_ids)
             result = pd.DataFrame(
-                {CONCEPT_ID: concept_ids[idx], START_DATE: start_dates[idx], PERSON_ID: person_ids[idx]})
+                {CONCEPT_ID: concept_ids[sorted_idx], START_DATE: start_dates[sorted_idx],
+                 PERSON_ID: person_ids[sorted_idx]})
         else:
-            result = pd.DataFrame({CONCEPT_ID: concept_ids[idx], START_DATE: start_dates[idx]})
+            result = pd.DataFrame({CONCEPT_ID: concept_ids[sorted_idx], START_DATE: start_dates[sorted_idx]})
         return result
 
 
@@ -207,7 +216,7 @@ def group_by_visit(
         cdm_tables: Dict[str, pd.DataFrame],
         link_by_date: bool = True,
         create_missing_visits: bool = True,
-        missing_visit_concept_id: int = 0,
+        missing_visit_concept_id: int = 1,
 ) -> List[VisitData]:
     """
     Groups events by visit.
@@ -250,8 +259,8 @@ def group_by_visit(
                                     == visit_occurrence_id
                             )
                             for visit_occurrence_id in zip(
-                                visits[VISIT_OCCURRENCE_ID].values
-                            )
+                            visits[VISIT_OCCURRENCE_ID].values
+                        )
                         ],
                         np.append(visit_indices, -1),
                     )
@@ -272,9 +281,9 @@ def group_by_visit(
                                 (cdm_table.loc[idx, start_date_field].values >= start_date)
                                 & (cdm_table.loc[idx, start_date_field].values <= end_date)
                                 for start_date, end_date in zip(
-                                    visits[VISIT_START_DATE].values,
-                                    visits[VISIT_END_DATE].values,
-                                )
+                                visits[VISIT_START_DATE].values,
+                                visits[VISIT_END_DATE].values,
+                            )
                             ],
                             np.append(visit_indices, -1),
                         )
@@ -304,8 +313,8 @@ def group_by_visit(
                         [
                             (cdm_table.loc[idx, start_date_field].values == start_date)
                             for start_date in zip(
-                                missing_visits[VISIT_START_DATE].values
-                            )
+                            missing_visits[VISIT_START_DATE].values
+                        )
                         ],
                         missing_visit_indices,
                     )

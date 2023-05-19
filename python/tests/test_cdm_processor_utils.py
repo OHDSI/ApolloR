@@ -51,7 +51,7 @@ def cdm_tables() -> Dict[str, pd.DataFrame]:
     condition_occurrence = pd.DataFrame(
         {
             "person_id": [1, 1, 1],
-            "condition_concept_id": [123, 456, 789],
+            "condition_concept_id": [123, 456, 0],
             "condition_start_date": ["2000-01-01", "2000-02-01", "2000-03-01"],
             "condition_end_date": ["2000-01-01", "2000-02-01", "2000-03-01"],
             "visit_occurrence_id": [1, np.NAN, np.NAN],
@@ -97,6 +97,11 @@ def test_call_per_observation_period(cdm_tables: Dict[str, pd.DataFrame]):
     assert len(visits) == 0
     visits = list_of_objects[2]["visit_occurrence"]
     assert len(visits) == 1
+
+def test_remove_concepts(cdm_tables: Dict[str, pd.DataFrame]):
+    new_cdm_tables, removed_counts = cpu.remove_concepts(cdm_tables)
+    assert removed_counts["condition_occurrence"] == 1
+    assert len(new_cdm_tables["condition_occurrence"] == 2)
 
 
 def test_union_domain_tables(cdm_tables: Dict[str, pd.DataFrame]):
@@ -155,13 +160,13 @@ def test_group_by_visit(cdm_tables: Dict[str, pd.DataFrame]):
     assert len(visit_group.cdm_tables["condition_occurrence"]) == 1
     assert visit_group.cdm_tables["condition_occurrence"]["condition_concept_id"].iat[0] == 456
     visit_group = visit_groups[2]  # New visit, derived from condition occurrence
-    assert visit_group.visit["visit_concept_id"] == 0
+    assert visit_group.visit["visit_concept_id"] == 1
     assert len(visit_group.cdm_tables["condition_occurrence"]) == 1
-    assert visit_group.cdm_tables["condition_occurrence"]["condition_concept_id"].iat[0] == 789
+    assert visit_group.cdm_tables["condition_occurrence"]["condition_concept_id"].iat[0] == 0
     visit_group = visit_groups[3]  # Third visit in CDM data, linked by date
     assert "condition_occurrence" not in visit_group.cdm_tables
     visit_group = visit_groups[4]  # New visit, derived from death
-    assert visit_group.visit["visit_concept_id"] == 0
+    assert visit_group.visit["visit_concept_id"] == 1
     assert len(visit_groups[4].cdm_tables["death"]) == 1
 
     visit_groups = cpu.group_by_visit(cdm_tables, link_by_date=True, create_missing_visits=False)
