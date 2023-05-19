@@ -41,6 +41,8 @@ class AbstractCdmDataProcessor(ABC):
     """
 
     def __init__(self, cdm_data_path: str, output_path: str, max_cores: int = -1):
+        if not os.path.exists(output_path):
+            os.makedirs(output_path)
         self._cdm_data_path = cdm_data_path
         self._max_cores = max_cores
         self._person_partition_count = 0
@@ -197,7 +199,3 @@ class AbstractToParquetCdmDataProcessor(AbstractCdmDataProcessor):
                 table=pa.Table.from_pandas(df=pd.concat(self._output), nthreads=1),
                 where=os.path.join(self._output_path, file_name),
             )
-
-    def _prepare(self):
-        if not os.path.exists(self._output_path):
-            os.makedirs(self._output_path)

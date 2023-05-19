@@ -32,7 +32,7 @@ class ProcessingStatistics:
         self.mapped_to_new_visit = 0
         self.existing_visits = 0
         self.new_visits = 0
-        self.removed_zero_concepts = 0
+        self.removed_concept_rows = 0
 
     def record_visit_mapping_stats(self, visit_data: cpu.VisitData):
         self.mapped_by_id += visit_data.mapped_by_id
@@ -43,8 +43,8 @@ class ProcessingStatistics:
         else:
             self.existing_visits += 1
 
-    def record_removed_concept_zero(self, zero_count: int):
-        self.removed_zero_concepts += zero_count
+    def record_removed_concept_rows(self, row_count: int):
+        self.removed_concept_rows += row_count
 
     def log_statistics(self, partition_i: int):
         logging.debug("Partition %s events mapped to visit by ID: %s", partition_i, self.mapped_by_id)
@@ -52,7 +52,7 @@ class ProcessingStatistics:
         logging.debug("Partition %s events mapped to new visits: %s", partition_i, self.mapped_to_new_visit)
         logging.debug("Partition %s existing visits: %s", partition_i, self.existing_visits)
         logging.debug("Partition %s newly created visits: %s", partition_i, self.new_visits)
-        logging.debug("Partition %s removed events having concept ID 0: %s", partition_i, self.removed_zero_concepts)
+        logging.debug("Partition %s removed events having unwanted concept ID: %s", partition_i, self.removed_concept_rows)
 
 
 class OutputRow:
@@ -139,7 +139,7 @@ class CehrBertCdmDataProcessor(AbstractToParquetCdmDataProcessor):
     def _process_person(self, person_id: int, cdm_tables: Dict[str, pd.DataFrame]):
         cdm_tables, removed_row_counts = cpu.remove_concepts(cdm_tables=cdm_tables,
                                                              concept_ids=self._concepts_to_remove)
-        self._processing_statistics.record_removed_concept_zero(sum(removed_row_counts.values()))
+        self._processing_statistics.record_removed_concept_rows(sum(removed_row_counts.values()))
         cpu.call_per_observation_period(
             cdm_tables=cdm_tables, function=self._process_observation_period
         )
@@ -191,7 +191,7 @@ class CehrBertCdmDataProcessor(AbstractToParquetCdmDataProcessor):
             output_row.visit_concept_ids.extend([visit_group.visit[cpu.VISIT_CONCEPT_ID]] * visit_token_len)
             previous_visit_end_date = visit_end_date
             self._processing_statistics.record_visit_mapping_stats(visit_group)
-        output_row.orders = list(range(1, len(output_row.concept_ids)))
+        output_row.orders = list(range(0, len(output_row.concept_ids)))
         output_row.num_of_visits = visit_rank
         output_row.num_of_concepts = len(output_row.concept_ids)
         self._output.append(output_row.to_pandas())

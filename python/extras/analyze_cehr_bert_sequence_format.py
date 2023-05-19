@@ -15,3 +15,29 @@ for column in x.columns:
   print(x[column].iat[0].dtype)
 
 v= x["concept_ids"].iat[0]
+
+
+full = pd.read_parquet(folder)
+cids = full["concept_ids"]
+cids = full["visit_concept_ids"]
+x = [j for i in cids for j in i]
+x = set(x)
+x = list(x)
+x.sort()
+x[:25]
+x[-25:-1]
+
+for i in range(len(full)):
+  cidLen = full["num_of_concepts"].iat[i]
+  if len(full["concept_ids"].iat[i]) != cidLen:
+    print(f"Issue with concept_ids for {i}")
+  if len(full["visit_segments"].iat[i]) != cidLen:
+    print(f"Issue with visit_segments for {i}")
+  if len(full["orders"].iat[i]) != cidLen:
+    print(f"Issue with orders for {i}")
+  if len(full["dates"].iat[i]) != cidLen:
+    print(f"Issue with dates for {i}")
+  if len(full["ages"].iat[i]) != cidLen:
+    print(f"Issue with ages for {i}")
+  if len(full["visit_concept_orders"].iat[i]) != cidLen:
+    print(f"Issue visit_concept_orders ages for {i}")
