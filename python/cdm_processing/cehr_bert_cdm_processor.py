@@ -1,8 +1,10 @@
+import sys
 from typing import Dict, List
 import math
 import datetime as dt
 import cProfile
 import logging
+import configparser
 
 import pandas as pd
 
@@ -135,7 +137,8 @@ class CehrBertCdmDataProcessor(AbstractToParquetCdmDataProcessor):
         super()._finish_partition(partition_i=partition_i)
 
     def _process_person(self, person_id: int, cdm_tables: Dict[str, pd.DataFrame]):
-        cdm_tables, removed_row_counts = cpu.remove_concepts(cdm_tables=cdm_tables, concept_ids=self._concepts_to_remove)
+        cdm_tables, removed_row_counts = cpu.remove_concepts(cdm_tables=cdm_tables,
+                                                             concept_ids=self._concepts_to_remove)
         self._processing_statistics.record_removed_concept_zero(sum(removed_row_counts.values()))
         cpu.call_per_observation_period(
             cdm_tables=cdm_tables, function=self._process_observation_period
@@ -194,15 +197,22 @@ class CehrBertCdmDataProcessor(AbstractToParquetCdmDataProcessor):
         self._output.append(output_row.to_pandas())
 
 
-if __name__ == "__main__":
+def main(args):
+    config = configparser.ConfigParser()
+    config.read(args[0])
     my_cdm_data_processor = CehrBertCdmDataProcessor(
-        cdm_data_path="d:/GPM_MDCD",
-        max_cores=15,
-        output_path="d:/GPM_MDCD/patient_sequence",
-        map_drugs_to_ingredients=True,
-        concepts_to_remove=[0, 900000010],
+        cdm_data_path=config["system"].get("cdm_data_path"),
+        max_cores=config["system"].getint("max_cores"),
+        output_path=config["system"].get("output_path"),
+        map_drugs_to_ingredients=config["mapping"].getboolean("map_drugs_to_ingredients"),
+        concepts_to_remove=[int(x) for x in config["mapping"].get("concepts_to_remove").split(",")],
     )
-    my_cdm_data_processor.process_cdm_data()
-    # Profiling code:
-    # my_cdm_data_processor._max_cores = -1
-    # cProfile.run("my_cdm_data_processor.process_cdm_data()", "../stats")
+    if config["debug"].getboolean("profile"):
+        my_cdm_data_processor._max_cores = -1
+        cProfile.run("my_cdm_data_processor.process_cdm_data()", "../stats")
+    else:
+        my_cdm_data_processor.process_cdm_data()
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

@@ -99,8 +99,8 @@ def call_per_observation_period(
         function(observation_period, new_cdm_tables)
 
 
-def remove_concepts(cdm_tables: Dict[str, pd.DataFrame], concept_ids: List[int] = [0]) -> (Dict[str, pd.DataFrame],
-                                                                                           Dict[str, int]):
+def remove_concepts(cdm_tables: Dict[str, pd.DataFrame], concept_ids: List[int]) -> (Dict[str, pd.DataFrame],
+                                                                                     Dict[str, int]):
     """
     Removes rows from the CDM tables where the concept ID is in the list of provided concept IDs.
     
@@ -258,9 +258,7 @@ def group_by_visit(
                                     cdm_table[VISIT_OCCURRENCE_ID].values
                                     == visit_occurrence_id
                             )
-                            for visit_occurrence_id in zip(
-                            visits[VISIT_OCCURRENCE_ID].values
-                        )
+                            for visit_occurrence_id in zip(visits[VISIT_OCCURRENCE_ID].values)
                         ],
                         np.append(visit_indices, -1),
                     )
@@ -281,9 +279,9 @@ def group_by_visit(
                                 (cdm_table.loc[idx, start_date_field].values >= start_date)
                                 & (cdm_table.loc[idx, start_date_field].values <= end_date)
                                 for start_date, end_date in zip(
-                                visits[VISIT_START_DATE].values,
-                                visits[VISIT_END_DATE].values,
-                            )
+                                    visits[VISIT_START_DATE].values,
+                                    visits[VISIT_END_DATE].values,
+                                )
                             ],
                             np.append(visit_indices, -1),
                         )
@@ -312,9 +310,7 @@ def group_by_visit(
                         [0] * sum(idx),
                         [
                             (cdm_table.loc[idx, start_date_field].values == start_date)
-                            for start_date in zip(
-                            missing_visits[VISIT_START_DATE].values
-                        )
+                            for start_date in zip(missing_visits[VISIT_START_DATE].values)
                         ],
                         missing_visit_indices,
                     )
@@ -364,7 +360,7 @@ def load_mapping_to_ingredients(cdm_data_path: str) -> Dict[int, int]:
     return mapping
 
 
-# Note: this does not appear to be a good idea. Eg. 'Brain injury without open intracranial wound' was mapped
+# Note: this does not appear to be a good idea. E.g. 'Brain injury without open intracranial wound' was mapped
 # to 'Disorder of nervous system', which seems a bit too generic.
 def load_mapping_to_3_digit_condition_codes(cdm_data_path: str) -> Dict[int, int]:
     """
