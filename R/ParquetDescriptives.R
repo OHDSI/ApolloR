@@ -40,16 +40,16 @@ computeParquetDescriptives <- function(folder) {
   errorMessages <- checkmate::makeAssertCollection()
   checkmate::assertCharacter(folder, len = 1, add = errorMessages)
   checkmate::reportAssertions(collection = errorMessages)
-
+  
   tableColumns <- getTableColumnsToExtract()
-
+  
   # Concept descriptives -------------------------------------------------------
   message("Computing concept descriptives")
   tableColumnsSubset <- tableColumns %>%
     filter(.data$conceptDescriptives == "yes") %>%
     group_by(.data$cdmTableName, .data$cdmFieldName) %>%
     group_split(.keep = TRUE)
-
+  
   conceptDescriptives <- lapply(tableColumnsSubset, computeConceptDescriptives, folder = folder)
   conceptDescriptives <- bind_rows(conceptDescriptives)
   concept <- arrow::open_dataset(file.path(folder, "concept"))
@@ -70,7 +70,7 @@ computeParquetDescriptives <- function(folder) {
     arrange(desc(.data$personCount))
   readr::write_csv(conceptDescriptives, file.path(folder, "ConceptDescriptives.csv"))
   message("Concept descriptives saved to ", file.path(folder, "ConceptDescriptives.csv"))
-
+  
   # Table descriptives ---------------------------------------------------------
   message("Computing table descriptives")
   tables <- tableColumns %>%
@@ -84,6 +84,10 @@ computeParquetDescriptives <- function(folder) {
 
 # row = tablesConceptDescriptives[[6]]
 computeConceptDescriptives <- function(row, folder) {
+  if (!dir.exists(file.path(folder, row$cdmTableName))) {
+    warning(sprintf("Cannot find table %s, skipping", row$cdmTableName))
+    return(NULL)
+  }
   message(sprintf("- Computing concept descriptives for field %s in table %s", row$cdmFieldName, row$cdmTableName))
   data <- arrow::open_dataset(file.path(folder, row$cdmTableName))
   if (hasUppercaseFields(data)) {
@@ -117,6 +121,10 @@ computeConceptDescriptives <- function(row, folder) {
 }
 
 computeTableDescriptives <- function(table, folder) {
+  if (!dir.exists(file.path(folder, table))) {
+    warning(sprintf("Cannot find table %s, skipping", table))
+    return(NULL)
+  }
   message(sprintf("- Computing table descriptives for table %s", table))
   data <- arrow::open_dataset(file.path(folder, table))
   descriptives <- tibble(
