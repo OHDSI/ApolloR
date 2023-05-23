@@ -20,6 +20,7 @@ v= x["concept_ids"].iat[0]
 full = pd.read_parquet(folder)
 cids = full["concept_ids"]
 cids = full["visit_concept_ids"]
+cids = full["dates"]
 x = [j for i in cids for j in i]
 x = set(x)
 x = list(x)
@@ -41,3 +42,19 @@ for i in range(len(full)):
     print(f"Issue with ages for {i}")
   if len(full["visit_concept_orders"].iat[i]) != cidLen:
     print(f"Issue visit_concept_orders ages for {i}")
+
+  max([max(x) for x in full["visit_concept_orders"]])
+  min([len(x) for x in full["visit_concept_orders"]])
+
+max_seq_len = 512
+idx = []
+for i in range(len(full)):
+  vcos = full["visit_concept_orders"].iat[i]
+  seq_length = len(vcos)
+  half_window_size = int(max_seq_len / 2)
+  for cursor in range(seq_length):
+    start_index = max(0, cursor - half_window_size)
+    end_index = min(cursor + half_window_size, seq_length)
+    sub_sequence = vcos[start_index:end_index]
+    if max(sub_sequence) - min(sub_sequence) > 512:
+      print(i)

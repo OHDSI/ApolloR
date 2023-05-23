@@ -33,6 +33,8 @@ class ProcessingStatistics:
         self.existing_visits = 0
         self.new_visits = 0
         self.removed_concept_rows = 0
+        self.persons = 0
+        self.observation_periods = 0
 
     def record_visit_mapping_stats(self, visit_data: cpu.VisitData):
         self.mapped_by_id += visit_data.mapped_by_id
@@ -46,7 +48,15 @@ class ProcessingStatistics:
     def record_removed_concept_rows(self, row_count: int):
         self.removed_concept_rows += row_count
 
+    def record_person(self):
+        self.persons += 1
+
+    def record_observation_period(self):
+        self.observation_periods += 1
+
     def log_statistics(self, partition_i: int):
+        logging.debug("Partition %s persons: %s", partition_i, self.persons)
+        logging.debug("Partition %s observation periods: %s", partition_i, self.observation_periods)
         logging.debug("Partition %s events mapped to visit by ID: %s", partition_i, self.mapped_by_id)
         logging.debug("Partition %s events mapped to visit by date: %s", partition_i, self.mapped_by_date)
         logging.debug("Partition %s events mapped to new visits: %s", partition_i, self.mapped_to_new_visit)
@@ -103,7 +113,7 @@ def _create_interval_token(days: int) -> str:
 
 
 def _days_to_weeks(days: int) -> int:
-    return math.floor(days / 7)
+    return math.floor(max(days, 0) / 7)
 
 
 def _days_to_months(days: int) -> int:
@@ -137,6 +147,7 @@ class CehrBertCdmDataProcessor(AbstractToParquetCdmDataProcessor):
         super()._finish_partition(partition_i=partition_i)
 
     def _process_person(self, person_id: int, cdm_tables: Dict[str, pd.DataFrame]):
+        self._processing_statistics.record_person()
         cdm_tables, removed_row_counts = cpu.remove_concepts(cdm_tables=cdm_tables,
                                                              concept_ids=self._concepts_to_remove)
         self._processing_statistics.record_removed_concept_rows(sum(removed_row_counts.values()))
@@ -147,6 +158,7 @@ class CehrBertCdmDataProcessor(AbstractToParquetCdmDataProcessor):
     def _process_observation_period(
             self, observation_period: pd.Series, cdm_tables: Dict[str, pd.DataFrame]
     ):
+        self._processing_statistics.record_observation_period()
         if self._map_drugs_to_ingredients and DRUG_EXPOSURE in cdm_tables:
             cdm_tables[DRUG_EXPOSURE] = cpu.map_concepts(cdm_table=cdm_tables[DRUG_EXPOSURE],
                                                          concept_id_field=DRUG_CONCEPT_ID,
@@ -194,7 +206,8 @@ class CehrBertCdmDataProcessor(AbstractToParquetCdmDataProcessor):
         output_row.orders = list(range(0, len(output_row.concept_ids)))
         output_row.num_of_visits = visit_rank
         output_row.num_of_concepts = len(output_row.concept_ids)
-        self._output.append(output_row.to_pandas())
+        if (len(output_row.concept_ids) > 0):
+            self._output.append(output_row.to_pandas())
 
 
 def main(args):
