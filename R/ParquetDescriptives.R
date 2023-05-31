@@ -53,17 +53,10 @@ computeParquetDescriptives <- function(folder) {
   conceptDescriptives <- lapply(tableColumnsSubset, computeConceptDescriptives, folder = folder)
   conceptDescriptives <- bind_rows(conceptDescriptives)
   concept <- arrow::open_dataset(file.path(folder, "concept"))
-  if (hasUppercaseFields(concept)) {
-    conceptNames <- concept %>%
-      select(conceptId = "CONCEPT_ID", conceptName = "CONCEPT_NAME") %>%
-      filter(.data$conceptId %in% conceptDescriptives$conceptId) %>%
-      collect()
-  } else {
-    conceptNames <- concept %>%
-      select(conceptId = "concept_id", conceptName = "concept_name") %>%
-      filter(.data$conceptId %in% conceptDescriptives$conceptId) %>%
-      collect()
-  }
+  conceptNames <- concept %>%
+    select(conceptId = "concept_id", conceptName = "concept_name") %>%
+    filter(.data$conceptId %in% conceptDescriptives$conceptId) %>%
+    collect()
   conceptDescriptives <- conceptDescriptives %>%
     inner_join(conceptNames, by = join_by("conceptId")) %>%
     select("cdmTableName", "cdmFieldName", "conceptId", "conceptName", "conceptCount", "personCount") %>%
@@ -90,27 +83,14 @@ computeConceptDescriptives <- function(row, folder) {
   }
   message(sprintf("- Computing concept descriptives for field %s in table %s", row$cdmFieldName, row$cdmTableName))
   data <- arrow::open_dataset(file.path(folder, row$cdmTableName))
-  if (hasUppercaseFields(data)) {
-    # upper case
-    columnIdx <- which(names(data) == toupper(row$cdmFieldName))
-    # Weird dplyr syntax to select a column by name (stored in a variable):
-    descriptives <- data %>%
-      select(x = all_of(columnIdx), "PERSON_ID") %>%
-      group_by(x) %>%
-      summarise(conceptCount = n(), personCount = n_distinct(.data$PERSON_ID)) %>%
-      ungroup() %>%
-      collect()
-  } else {
-    # lower case
-    columnIdx <- which(names(data) == row$cdmFieldName)
-    # Weird dplyr syntax to select a column by name (stored in a variable):
-    descriptives <- data %>%
-      select(x = all_of(columnIdx), "person_id") %>%
-      group_by(x) %>%
-      summarise(conceptCount = n(), personCount = n_distinct(.data$person_id)) %>%
-      ungroup() %>%
-      collect()
-  }
+  columnIdx <- which(names(data) == row$cdmFieldName)
+  # Weird dplyr syntax to select a column by name (stored in a variable):
+  descriptives <- data %>%
+    select(x = all_of(columnIdx), "person_id") %>%
+    group_by(x) %>%
+    summarise(conceptCount = n(), personCount = n_distinct(.data$person_id)) %>%
+    ungroup() %>%
+    collect()
   descriptives <- descriptives %>%
     mutate(
       cdmTableName = as.factor(row$cdmTableName),
@@ -129,25 +109,26 @@ computeTableDescriptives <- function(table, folder) {
   data <- arrow::open_dataset(file.path(folder, table))
   descriptives <- tibble(
     cdmTableName = table,
-    rowCount = nrow(data),
-    personCount = as.numeric(NA)
+    rowCount = nrow(data)
   )
-  if (hasUppercaseFields(data)) {
-    if ("PERSON_ID" %in% names(data)) {
-      descriptives$personCount <- data %>%
-        summarise(n_distinct(.data$PERSON_ID)) %>%
-        pull(as_vector = TRUE)
-    }
-  } else {
-    if ("person_id" %in% names(data)) {
-      descriptives$personCount <- data %>%
-        summarise(n_distinct(.data$person_id)) %>%
-        pull(as_vector = TRUE)
-    }
+  if ("person_id" %in% names(data)) {
+    personDescriptives <- data %>%
+      group_by(.data$person_id) %>%
+      summarise(recordCount = n()) %>%
+      ungroup() %>%
+      summarise(
+        personCount = n(),
+        meanRecordsPerPerson = mean(.data$recordCount),
+        minRecordsPerPerson = min(.data$recordCount),
+        p5RecordsPerPerson = quantile(.data$recordCount, 0.05),
+        p25RecordsPerPerson = quantile(.data$recordCount, 0.25),
+        medianRecordsPerPerson = median(.data$recordCount),
+        p75RecordsPerPerson = quantile(.data$recordCount, 0.75),
+        p95RecordsPerPerson = quantile(.data$recordCount, 0.95),
+        maxRecordsPerPerson = max(.data$recordCount)
+      ) %>%
+      collect()
+    descriptives <- bind_cols(descriptives, personDescriptives)
   }
   return(descriptives)
-}
-
-hasUppercaseFields <- function(dataset) {
-  return(all(names(dataset) == toupper(names(dataset))))
 }
