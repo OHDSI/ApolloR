@@ -1,6 +1,6 @@
 library(GeneralPretrainedModelTools)
 
-maxCores <- max(8, parallel::detectCores())
+maxCores <- min(8, parallel::detectCores())
 
 # Settings ---------------------------------------------------------------------
 
@@ -14,7 +14,9 @@ connectionDetails <- DatabaseConnector::createConnectionDetails(
 cdmDatabaseSchema <- "cdm_truven_mdcd_v2321"
 workDatabaseSchema <- "scratch_mschuemi"
 partitionTablePrefix <- "GPM_MDCD"
-folder <- "d:/GPM_MDCD"
+folder <- "d:/GPM_MDCD_2"
+sampleSize <- 1e5
+partitions <- 100
 
 # CCAE
 connectionDetails <- DatabaseConnector::createConnectionDetails(
@@ -27,6 +29,9 @@ cdmDatabaseSchema <- "cdm_truven_ccae_v2182"
 workDatabaseSchema <- "scratch_mschuemi"
 partitionTablePrefix <- "GPM_CCAE"
 folder <- "d:/GPM_CCAE"
+sampleSize <- 2e6
+partitions <- 200
+
 
 # CCAE (linux)
 connectionDetails <- DatabaseConnector::createConnectionDetails(
@@ -39,6 +44,9 @@ cdmDatabaseSchema <- "cdm_truven_ccae_v2182"
 workDatabaseSchema <- "scratch_mschuemi"
 partitionTablePrefix <- "GPM_CCAE"
 folder <- "/data/gpm_CCAE"
+sampleSize <- 2e6
+partitions <- 200
+
 
 # Data fetch -------------------------------------------------------------------
 extractCdmToParquet(
@@ -47,9 +55,9 @@ extractCdmToParquet(
   workDatabaseSchema = workDatabaseSchema,
   partitionTablePrefix = partitionTablePrefix,
   folder = folder,
-  sampleSize = 2e6,
-  partitions = 100,
-  maxCores = 4,
+  sampleSize = sampleSize,
+  partitions = partitions,
+  maxCores = maxCores,
   forceRestart = FALSE
 ) 
 

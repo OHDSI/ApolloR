@@ -324,14 +324,41 @@ executeExtractDataJob <- function(job,
   data <- DatabaseConnector::renderTranslateQuerySql(
     connection = connection,
     sql = sql,
-    integer64AsNumeric = FALSE
+    integer64AsNumeric = FALSE,
+    integerAsNumeric = FALSE
   )
   colnames(data) <- tolower(colnames(data))
+  data <- enforceDataTypes(data, job$table)
   message(sprintf("Writing data partition to %s", job$fileName))
   arrow::write_parquet(
     x = data,
     sink = job$fileName,
   )
+}
+
+enforceDataTypes <- function(data, cdmTableName){
+  columnsToExtract <- getTableColumnsToExtract() %>%
+    filter(.data$cdmTableName == !!cdmTableName)
+  for (i in seq_len(nrow(columnsToExtract))) {
+    cdmFieldName <- columnsToExtract$cdmFieldName[i]
+    dataType <- columnsToExtract$dataType[i]
+    column <- data[[cdmFieldName]]
+    if (dataType == "int32") {
+      column <- as.integer(column)
+    } else if (dataType == "int64") {
+      column <- bit64::as.integer64(column)
+    } else if (dataType == "double") {
+      column <- as.numeric(column)
+    } else if (dataType == "date") {
+      column <- as.Date(column)
+    } else if (dataType == "string") {
+      column <- as.character(column)
+    } else {
+      stop(sprintf("Unknown data type '%s' fpr field '%s' in table '%s'.", dataType, cdmFieldName, cdmTableName))
+    }
+    data[[cdmFieldName]] <- column
+  }
+  return(data)
 }
 
 dropPartitionTables <- function(connectionDetails,
