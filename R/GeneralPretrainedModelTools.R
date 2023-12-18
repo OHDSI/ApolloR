@@ -18,5 +18,8 @@
 "_PACKAGE"
 
 #' @import dplyr
+#' @import DatabaseConnector
 #' @importFrom rlang .data
+#' @importFrom stats median quantile
+#' @importFrom utils read.csv
 NULL

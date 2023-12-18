@@ -13,7 +13,16 @@ Imports:
   rlang,
   dplyr,
   ParallelLogger,
-  arrow
+  arrow,
+  Andromeda,
+  bit64,
+  checkmate,
+  readr
+Suggests:
+  FeatureExtraction,
+  testthat
+Remotes:
+  ohdsi/FeatureExtraction
 License: Apache License
 RoxygenNote: 7.2.3
 Roxygen: list(markdown = TRUE)

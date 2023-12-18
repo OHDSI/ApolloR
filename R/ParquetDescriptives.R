@@ -67,7 +67,7 @@ computeParquetDescriptives <- function(folder) {
   # Table descriptives ---------------------------------------------------------
   message("Computing table descriptives")
   tables <- tableColumns %>%
-    distinct(cdmTableName) %>%
+    distinct(.data$cdmTableName) %>%
     pull()
   tableDescriptives <- lapply(tables, computeTableDescriptives, folder = folder)
   tableDescriptives <- bind_rows(tableDescriptives)
@@ -87,7 +87,7 @@ computeConceptDescriptives <- function(row, folder) {
   # Weird dplyr syntax to select a column by name (stored in a variable):
   descriptives <- data %>%
     select(x = all_of(columnIdx), "person_id") %>%
-    group_by(x) %>%
+    group_by(.data$x) %>%
     summarise(conceptCount = n(), personCount = n_distinct(.data$person_id)) %>%
     ungroup() %>%
     collect()

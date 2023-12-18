@@ -170,21 +170,27 @@ createPartitionTables <- function(connectionDetails,
   }
 }
 
-createJobList <- function(partitions, folder) {
+createJobList <- function(partitions, folder, skipConceptTables = FALSE) {
   tablesToExtract <- getTableColumnsToExtract() %>%
     distinct(.data$cdmTableName) %>%
     pull(.data$cdmTableName)
+  if (skipConceptTables) {
+    tablesToExtract <- tablesToExtract[!grepl("concept", tablesToExtract)]
+  }
   jobs <- expand.grid(table = tablesToExtract, partition = seq_len(partitions)) %>%
     as_tibble() %>%
     mutate(fileName = file.path(folder, .data$table, sprintf("part%04d.parquet", .data$partition)))
   return(jobs)
 }
 
-createFolders <- function(folder, restart) {
-  foldersToCreate <- getTableColumnsToExtract() %>%
+createFolders <- function(folder, restart, skipConceptTables = FALSE) {
+  tablesToExtract <- getTableColumnsToExtract() %>%
     distinct(.data$cdmTableName) %>%
-    mutate(folder = file.path(!!folder, .data$cdmTableName)) %>%
-    pull(.data$folder)
+    pull(.data$cdmTableName)
+  if (skipConceptTables) {
+    tablesToExtract <- tablesToExtract[!grepl("concept", tablesToExtract)]
+  }
+  foldersToCreate <- file.path(folder, tablesToExtract)
   if (restart) {
     for (folder in foldersToCreate) {
       if (dir.exists(folder)) {
@@ -267,7 +273,7 @@ executeExtractDataJob <- function(job,
   connection <- get("connection", envir = threadEnv)
   columnsToExtract <- getTableColumnsToExtract() %>%
     filter(.data$cdmTableName == job$table) %>%
-    pull(cdmFieldName)
+    pull(.data$cdmFieldName)
   
   sql <- sprintf("SELECT %s\nFROM %s.%s",
                  paste(paste(job$table, columnsToExtract, sep = "."), collapse = ",\n  "),
