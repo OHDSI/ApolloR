@@ -21,7 +21,8 @@ Imports:
 Suggests:
   FeatureExtraction,
   testthat,
-  Eunomia
+  Eunomia,
+  reticulate
 Remotes:
   ohdsi/FeatureExtraction,
   ohdsi/Eunomia

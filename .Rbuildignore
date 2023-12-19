@@ -3,3 +3,5 @@
 ^python
 ^extras
 .github
+_pkgdown.yml
+^docs
