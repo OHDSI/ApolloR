@@ -1,0 +1,4 @@
+[submodule "inst/python"]
+	path = inst/python
+	url = https://github.com/OHDSI/Apollo.git
+	branch = main
