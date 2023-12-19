@@ -30,4 +30,6 @@ devtools::spell_check()
 
 # Create manual:
 unlink("extras/GeneralPretrainedModelTools.pdf")
-shell("R CMD Rd2pdf ./ --output=extras/GeneralPretrainedModelTools.pdf")
+system("R CMD Rd2pdf ./ --output=extras/GeneralPretrainedModelTools.pdf")
+
+pkgdown::build_site()
