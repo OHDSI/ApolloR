@@ -53,7 +53,7 @@ reused for a future data pull.}
 Extract data from the server for a random sample of persons, and stores them
 in the local file system as Parquet files. Has the following features:
 \itemize{
-\item Extracts the subset of CDM tables and fields listed here: https://github.com/OHDSI/GeneralPretrainedModelTools/blob/main/inst/tableColumnsToExtract.csv
+\item Extracts the subset of CDM tables and fields listed here: https://github.com/OHDSI/ApolloR/blob/main/inst/tableColumnsToExtract.csv
 \item Can restrict to a sample of person_ids, as specified with the \code{sampleSize} argument.
 \item Loads and saves the tables in as many partitions as the user specifies (see \code{partitions} argument). The partitioning is done by person_id (or concept_id for the concept and concept_ancestor table), in a way that the n-th partition of each domain table refers to the same person_ids.
 \item Restricts the concept table to  standard concepts only (ie. those concepts that are allowed to be used in the CDM), to save space.

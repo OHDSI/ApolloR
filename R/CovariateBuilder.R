@@ -1,6 +1,6 @@
 # Copyright 2023 Observational Health Data Sciences and Informatics
 #
-# This file is part of GeneralPretrainedModelTools
+# This file is part of ApolloR
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ createCdmCovariateSettings <- function(folder,
                             windowEnd = windowEnd,
                             partitions = partitions,
                             analysisId = analysisId)
-  attr(covariateSettings, "fun") <- "GeneralPretrainedModelTools:::getDbCdmCovariateData"
+  attr(covariateSettings, "fun") <- "ApolloR:::getDbCdmCovariateData"
   class(covariateSettings) <- "covariateSettings"
   return(covariateSettings)
 }
@@ -80,7 +80,7 @@ getDbCdmCovariateData <- function(connection,
   
   sql <- SqlRender::loadRenderTranslateSql(
     sqlFilename = "CreateCohortPartitionTable.sql",
-    packageName = "GeneralPretrainedModelTools",
+    packageName = "ApolloR",
     dbms = DatabaseConnector::dbms(connection),
     cdm_database_schema = cdmDatabaseSchema,
     cohort_table = cohortTable,
@@ -121,7 +121,7 @@ getDbCdmCovariateData <- function(connection,
   # Construct covariate reference:
   covariateRef <- data.frame(
     covariateId = 1,
-    covariateName = "Cohort entry marker for GeneralPretrainedModelTools",
+    covariateName = "Cohort entry marker for ApolloR",
     analysisId = covariateSettings$analysisId,
     conceptId = 0
   )
@@ -129,7 +129,7 @@ getDbCdmCovariateData <- function(connection,
   # Construct analysis reference:
   analysisRef <- data.frame(
     analysisId = covariateSettings$analysisId,
-    analysisName = "Cohort entry marker for GeneralPretrainedModelTools",
+    analysisName = "Cohort entry marker for ApolloR",
     domainId = "All",
     startDay = 0,
     endDay = 0,
@@ -176,7 +176,7 @@ executeExtractCovariateDataJob <- function(job,
     
     sql <- SqlRender::loadRenderTranslateSql(
       sqlFilename = "GetCovariateData.sql",
-      packageName = "GeneralPretrainedModelTools",
+      packageName = "ApolloR",
       dbms = DatabaseConnector::dbms(connection),
       cdm_database_schema = cdmDatabaseSchema,
       cdm_table = job$table,

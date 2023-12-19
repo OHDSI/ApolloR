@@ -1,3 +1,3 @@
 library(testthat)
-library(GeneralPretrainedModelTools)
-test_check("GeneralPretrainedModelTools")
+library(ApolloR)
+test_check("ApolloR")

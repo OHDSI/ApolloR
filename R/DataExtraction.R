@@ -1,6 +1,6 @@
 # Copyright 2023 Observational Health Data Sciences and Informatics
 #
-# This file is part of GeneralPretrainedModelTools
+# This file is part of ApolloR
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@
 #' Extract data from the server for a random sample of persons, and stores them 
 #' in the local file system as Parquet files. Has the following features:
 #' 
-#' - Extracts the subset of CDM tables and fields listed here: https://github.com/OHDSI/GeneralPretrainedModelTools/blob/main/inst/tableColumnsToExtract.csv
+#' - Extracts the subset of CDM tables and fields listed here: https://github.com/OHDSI/ApolloR/blob/main/inst/tableColumnsToExtract.csv
 #' - Can restrict to a sample of person_ids, as specified with the `sampleSize` argument.
 #' - Loads and saves the tables in as many partitions as the user specifies (see `partitions` argument). The partitioning is done by person_id (or concept_id for the concept and concept_ancestor table), in a way that the n-th partition of each domain table refers to the same person_ids.
 #' - Restricts the concept table to  standard concepts only (ie. those concepts that are allowed to be used in the CDM), to save space.
@@ -156,7 +156,7 @@ createPartitionTables <- function(connectionDetails,
     message("Creating partition tables")
     sql <- SqlRender::loadRenderTranslateSql(
       sqlFilename = "CreatePartitionTables.sql",
-      packageName = "GeneralPretrainedModelTools",
+      packageName = "ApolloR",
       dbms = connectionDetails$dbms,
       cdm_database_schema = cdmDatabaseSchema,
       work_database_schema = workDatabaseSchema,
@@ -376,7 +376,7 @@ dropPartitionTables <- function(connectionDetails,
   message("Dropping partition tables")
   sql <- SqlRender::loadRenderTranslateSql(
     sqlFilename = "DropPartitionTables.sql",
-    packageName = "GeneralPretrainedModelTools",
+    packageName = "ApolloR",
     dbms = connectionDetails$dbms,
     work_database_schema = workDatabaseSchema,
     person_id_partition_table = personIdPartitionTable,

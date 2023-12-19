@@ -1,4 +1,4 @@
-library(GeneralPretrainedModelTools)
+library(ApolloR)
 
 maxCores <- min(8, parallel::detectCores())
 

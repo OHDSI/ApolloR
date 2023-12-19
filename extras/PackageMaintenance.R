@@ -1,6 +1,6 @@
 # Copyright 2023 Observational Health Data Sciences and Informatics
 #
-# This file is part of GeneralPretrainedModelTools
+# This file is part of ApolloR
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,21 +15,21 @@
 # limitations under the License.
 
 # Manually delete package from library. Avoids "Already in use" message when rebuilding
-unloadNamespace("GeneralPretrainedModelTools")
+unloadNamespace("ApolloR")
 .rs.restartR()
-folder <- system.file(package = "GeneralPretrainedModelTools")
+folder <- system.file(package = "ApolloR")
 folder
 unlink(folder, recursive = TRUE, force = TRUE)
 file.exists(folder)
 
 # Format and check code:
 styler::style_pkg()
-OhdsiRTools::checkUsagePackage("GeneralPretrainedModelTools")
+OhdsiRTools::checkUsagePackage("ApolloR")
 OhdsiRTools::updateCopyrightYearFolder()
 devtools::spell_check()
 
 # Create manual:
-unlink("extras/GeneralPretrainedModelTools.pdf")
-system("R CMD Rd2pdf ./ --output=extras/GeneralPretrainedModelTools.pdf")
+unlink("extras/ApolloR.pdf")
+system("R CMD Rd2pdf ./ --output=extras/ApolloR.pdf")
 
 pkgdown::build_site()

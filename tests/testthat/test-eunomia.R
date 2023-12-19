@@ -1,5 +1,5 @@
 library(testthat)
-library(GeneralPretrainedModelTools)
+library(ApolloR)
 library(Eunomia)
 library(FeatureExtraction)
 
