@@ -20,9 +20,11 @@ Imports:
   readr
 Suggests:
   FeatureExtraction,
-  testthat
+  testthat,
+  Eunomia
 Remotes:
-  ohdsi/FeatureExtraction
+  ohdsi/FeatureExtraction,
+  ohdsi/Eunomia
 License: Apache License
 RoxygenNote: 7.2.3
 Roxygen: list(markdown = TRUE)
