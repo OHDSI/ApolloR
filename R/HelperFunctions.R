@@ -19,3 +19,21 @@ getTableColumnsToExtract <- function() {
   tableColumnsToExtract <- read.csv(pathToCsv)
   return(tableColumnsToExtract)
 }
+
+#' Get path to Python's requirements.txt 
+#'
+#' @return
+#' The path
+#' 
+#' @export
+getPythonRequirementsFilePath <- function() {
+  return(system.file("python", "requirements.txt", package = "ApolloR"))
+}
+
+ensurePythonFolderSet <- function() {
+  pythonFolder <- system.file("python", package = "ApolloR")
+  sys <- reticulate::import("sys")
+  if (!pythonFolder %in% sys$path) {
+    reticulate::py_run_string(paste0("import sys; sys.path.append('", pythonFolder, "')"))
+  }
+}

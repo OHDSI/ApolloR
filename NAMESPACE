@@ -3,6 +3,7 @@
 export(computeParquetDescriptives)
 export(createCdmCovariateSettings)
 export(extractCdmToParquet)
+export(getPythonRequirementsFilePath)
 import(DatabaseConnector)
 import(dplyr)
 importFrom(rlang,.data)
