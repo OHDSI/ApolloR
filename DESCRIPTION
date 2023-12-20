@@ -17,12 +17,13 @@ Imports:
   Andromeda,
   bit64,
   checkmate,
-  readr
+  readr,
+  reticulate,
+  yaml
 Suggests:
   FeatureExtraction,
   testthat,
-  Eunomia,
-  reticulate
+  Eunomia
 Remotes:
   ohdsi/FeatureExtraction,
   ohdsi/Eunomia
