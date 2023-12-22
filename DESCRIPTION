@@ -23,7 +23,8 @@ Imports:
 Suggests:
   FeatureExtraction,
   testthat,
-  Eunomia
+  Eunomia,
+  withr
 Remotes:
   ohdsi/FeatureExtraction,
   ohdsi/Eunomia

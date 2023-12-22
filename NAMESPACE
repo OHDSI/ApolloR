@@ -2,8 +2,13 @@
 
 export(computeParquetDescriptives)
 export(createCdmCovariateSettings)
+export(createModelSettings)
+export(createTrainingSettings)
 export(extractCdmToParquet)
+export(fineTuneModel)
 export(getPythonRequirementsFilePath)
+export(predictFineTuned)
+export(pretrainModel)
 import(DatabaseConnector)
 import(dplyr)
 importFrom(rlang,.data)
