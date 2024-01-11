@@ -123,7 +123,7 @@ pretrainModel <- function(parquetFolder,
       num_epochs = as.integer(1),
       num_freeze_epochs = as.integer(0),
       learning_rate = 0.001,
-      weight_decay = 0.01
+      weight_decay = 0.0
     ),
     model = modelSettings
   )

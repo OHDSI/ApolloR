@@ -123,3 +123,17 @@ test_that("Predict on Eunomia", {
                                  maxCores = 1)
   expect_true(all(population$rowId %in% prediction$observation_period_id))
 })
+
+
+# population <- population[order(population$rowId), ]
+# prediction <- prediction[order(prediction$observation_period_id), ]
+
+
+# R.utils::copyDirectory(fineTunedModelFolder, "~/data/DebugFineTuneModel/", recursive = TRUE)
+# R.utils::copyDirectory(attr(covariateData, "metaData")$parquetRootFolder, "~/data/DebugCovariateData/", recursive = TRUE)
+# population <- population %>%
+#   mutate(outcomeCount = 0)
+# ApolloR:::writeLabelsToParquet(labels = population,
+#                                parquetRootFolder = attr(covariateData, "metaData")$parquetRootFolder)
+# nrow(population)
+# # [1] 479
