@@ -23,11 +23,11 @@ fineTuneModel(
 \item{labels}{The labels to use for training. A data frame containing at least two
 columns: \code{rowId} and \code{outcomeCount}.}
 
+\item{trainingSettings}{Parameters used when training the model.}
+
 \item{maxCores}{The maximum number of CPU cores to use during fine-tuning. If a GPU
 is found (CUDA or MPS), it will automatically be used irrespective
 of the  setting of \code{maxCores}.}
-
-\item{trainingSettings.}{Parameters used when training the model.}
 }
 \value{
 Does not return anything. Is called for the side effect of creating the fine-tuned model and

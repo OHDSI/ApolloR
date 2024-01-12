@@ -23,35 +23,35 @@ createModelSettings(
 )
 }
 \arguments{
-\item{maxSequenceLength}{}
+\item{maxSequenceLength}{The maximum length of the input sequence.}
 
-\item{conceptEmbedding}{}
+\item{conceptEmbedding}{Use concept embedding?}
 
-\item{visitOrderEmbedding}{}
+\item{visitOrderEmbedding}{Use visit order embedding?}
 
-\item{segmentEmbedding}{}
+\item{segmentEmbedding}{Use segement embedding?}
 
-\item{ageEmbedding}{}
+\item{ageEmbedding}{Use age embedding?}
 
-\item{dateEmbedding}{}
+\item{dateEmbedding}{Use date embedding?}
 
-\item{visitConceptEmbedding}{}
+\item{visitConceptEmbedding}{Use visit concept embedding?}
 
-\item{hiddenSize}{}
+\item{hiddenSize}{Size of hidden layers.}
 
-\item{numAttentionHeads}{}
+\item{numAttentionHeads}{Number of attention heads.}
 
-\item{numHiddenLayers}{}
+\item{numHiddenLayers}{Number of hidden layers.}
 
-\item{intermediateSize}{}
+\item{intermediateSize}{Size of intermediate layers.}
 
-\item{hiddenAct}{}
+\item{hiddenAct}{Type of activation function used in the intermediate layer. Can be "gelu" or "relu".}
 
-\item{embeddingCombinationMethod}{}
+\item{embeddingCombinationMethod}{Type of embedding combination method. Can be "sum" or "concat".}
 
-\item{hiddenDropoutProb}{}
+\item{hiddenDropoutProb}{Dropout probability for the hidden layers.}
 
-\item{attentionProbsDropoutProb}{}
+\item{attentionProbsDropoutProb}{Dropout probability for the attention layer.}
 }
 \value{
 A model settings object.

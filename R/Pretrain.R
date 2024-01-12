@@ -16,21 +16,21 @@
 
 #' Create model settings
 #'
-#' @param maxSequenceLength 
-#' @param conceptEmbedding 
-#' @param visitOrderEmbedding 
-#' @param segmentEmbedding 
-#' @param ageEmbedding 
-#' @param dateEmbedding 
-#' @param visitConceptEmbedding 
-#' @param hiddenSize 
-#' @param numAttentionHeads 
-#' @param numHiddenLayers 
-#' @param intermediateSize 
-#' @param hiddenAct 
-#' @param embeddingCombinationMethod 
-#' @param hiddenDropoutProb 
-#' @param attentionProbsDropoutProb 
+#' @param maxSequenceLength           The maximum length of the input sequence.
+#' @param conceptEmbedding            Use concept embedding?
+#' @param visitOrderEmbedding         Use visit order embedding?
+#' @param segmentEmbedding            Use segement embedding?
+#' @param ageEmbedding                Use age embedding?
+#' @param dateEmbedding               Use date embedding?
+#' @param visitConceptEmbedding       Use visit concept embedding?
+#' @param hiddenSize                  Size of hidden layers.
+#' @param numAttentionHeads           Number of attention heads.
+#' @param numHiddenLayers             Number of hidden layers.
+#' @param intermediateSize            Size of intermediate layers.
+#' @param hiddenAct                   Type of activation function used in the intermediate layer. Can be "gelu" or "relu".
+#' @param embeddingCombinationMethod  Type of embedding combination method. Can be "sum" or "concat".
+#' @param hiddenDropoutProb           Dropout probability for the hidden layers.
+#' @param attentionProbsDropoutProb   Dropout probability for the attention layer.
 #'
 #' @return
 #' A model settings object.

@@ -9,19 +9,22 @@ createTrainingSettings(
   numEpochs = 100,
   numFreezeEpochs = 1,
   learningRate = 0.001,
-  weightDecay = 0.01
+  weightDecay = 0
 )
 }
 \arguments{
-\item{trainFraction}{}
+\item{trainFraction}{Fraction of the data to use for training. Set to 1 to skip evaluation.}
 
-\item{numEpochs}{}
+\item{numEpochs}{Number of epochs to train for.}
 
-\item{numFreezeEpochs}{}
+\item{numFreezeEpochs}{Number of epochs to freeze the pre-trained model for.}
 
-\item{learningRate}{}
+\item{learningRate}{Learning rate for the Adam optimizer.}
 
-\item{weightDecay}{}
+\item{weightDecay}{Weight decay for the Adam optimizer.}
+}
+\value{
+Training settings.
 }
 \description{
 Create model training settings

@@ -16,21 +16,21 @@
 
 #' Create model training settings
 #'
-#' @param trainFraction 
-#' @param numEpochs 
-#' @param numFreezeEpochs 
-#' @param learningRate 
-#' @param weightDecay 
+#' @param trainFraction   Fraction of the data to use for training. Set to 1 to skip evaluation.
+#' @param numEpochs       Number of epochs to train for.
+#' @param numFreezeEpochs Number of epochs to freeze the pre-trained model for.
+#' @param learningRate    Learning rate for the Adam optimizer.
+#' @param weightDecay     Weight decay for the Adam optimizer.
 #'
 #' @return
+#' Training settings.
+#' 
 #' @export
-#'
-#' @examples
 createTrainingSettings <- function(trainFraction = 1.0, 
                                    numEpochs = 100,
                                    numFreezeEpochs = 1,
                                    learningRate = 0.001,
-                                   weightDecay = 0.01) {
+                                   weightDecay = 0.0) {
   settings <- list()
   for (name in names(formals(createTrainingSettings))) {
     settings[[SqlRender::camelCaseToSnakeCase(name)]] <- intToInteger(get(name))
@@ -45,7 +45,7 @@ createTrainingSettings <- function(trainFraction = 1.0,
 #' @param covariateData         The `CovariateData` object containing the CDM  data covariates.
 #' @param labels                The labels to use for training. A data frame containing at least two
 #'                              columns: `rowId` and `outcomeCount`. 
-#' @param trainingSettings.     Parameters used when training the model.
+#' @param trainingSettings      Parameters used when training the model.
 #' @param maxCores              The maximum number of CPU cores to use during fine-tuning. If a GPU 
 #'                              is found (CUDA or MPS), it will automatically be used irrespective 
 #'                              of the  setting of `maxCores`.
@@ -133,7 +133,7 @@ predictFineTuned <- function(fineTunedModelFolder,
 
 writeLabelsToParquet <- function(labels, parquetRootFolder) {
   labels <- labels %>%
-    transmute(observation_period_id = .data$rowId, label = (outcomeCount != 0))
+    transmute(observation_period_id = .data$rowId, label = (.data$outcomeCount != 0))
   labelFolder <- file.path(parquetRootFolder, "label")
   if (dir.exists(labelFolder)) {
     # Already exist, probably from an earlier training or prediction
