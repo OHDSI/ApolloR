@@ -25,7 +25,7 @@ connectionDetails <- DatabaseConnector::createConnectionDetails(
   user = keyring::key_get("redShiftUserName"),
   password = keyring::key_get("redShiftPassword")
 )
-cdmDatabaseSchema <- "cdm_truven_ccae_v2182"
+cdmDatabaseSchema <- "cdm_truven_ccae_v2633"
 workDatabaseSchema <- "scratch_mschuemi"
 partitionTablePrefix <- "GPM_CCAE"
 folder <- "d:/GPM_CCAE"
@@ -58,7 +58,7 @@ extractCdmToParquet(
   sampleSize = sampleSize,
   partitions = partitions,
   maxCores = maxCores,
-  forceRestart = FALSE
+  forceRestart = TRUE
 ) 
 
 # Descriptives -----------------------------------------------------------------

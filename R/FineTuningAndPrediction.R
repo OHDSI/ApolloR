@@ -133,7 +133,7 @@ predictFineTuned <- function(fineTunedModelFolder,
 
 writeLabelsToParquet <- function(labels, parquetRootFolder) {
   labels <- labels %>%
-    transmute(observation_period_id = .data$rowId, label = (.data$outcomeCount != 0))
+    transmute(observation_period_id = bit64::as.integer64(.data$rowId), label = (.data$outcomeCount != 0))
   labelFolder <- file.path(parquetRootFolder, "label")
   if (dir.exists(labelFolder)) {
     # Already exist, probably from an earlier training or prediction
