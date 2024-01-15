@@ -135,6 +135,7 @@ FeatureExtraction::saveCovariateData(covariateData2, file.path(predictionFolder,
 DatabaseConnector::disconnect(connection)
 
 # Train models -----------------------------------------------------------------
+predictionFolder <- file.path(rootFolder, "pred2")
 sets <- readRDS(file.path(predictionFolder, "Sets.rds"))
 
 trainSet <- sets %>%

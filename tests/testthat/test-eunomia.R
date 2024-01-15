@@ -61,7 +61,7 @@ test_that("Custom covariate buider on Eunomia", {
 test_that("Pretrain model on Eunomia", {
   # Skipping on GA for now, need to ensure Python installed and configured:
   skip_on_ci()
-  
+  reticulate::use_virtualenv("apollo")
   modelSettings <- createModelSettings(maxSequenceLength = 8,
                                        hiddenSize = 8,
                                        numAttentionHeads = 1,
@@ -77,7 +77,7 @@ test_that("Pretrain model on Eunomia", {
 test_that("Fine-tune on Eunomia", {
   # Skipping on GA for now, need to ensure Python installed and configured:
   skip_on_ci()
-  
+  reticulate::use_virtualenv("apollo")
   covariateSettings <- createCdmCovariateSettings(folder = rootFolder)
   covariateData <- FeatureExtraction::getDbCovariateData(
     connectionDetails = connectionDetails,
@@ -104,7 +104,7 @@ test_that("Fine-tune on Eunomia", {
 test_that("Predict on Eunomia", {
   # Skipping on GA for now, need to ensure Python installed and configured:
   skip_on_ci()
-  
+  reticulate::use_virtualenv("apollo")
   covariateSettings <- createCdmCovariateSettings(folder = rootFolder)
   covariateData <- FeatureExtraction::getDbCovariateData(
     connectionDetails = connectionDetails,

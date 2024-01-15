@@ -31,9 +31,6 @@ to clone in two steps.
 Assuming the right Python version (3.10) has been installed and is picked up by `reticulate`:
 
 ```r
-# Verify we're using the right Python version:
-reticulate::py_config()
-
 # Create virtual environment:
 reticulate::virtualenv_create(
   envname = "apollo",

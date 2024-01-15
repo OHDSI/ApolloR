@@ -132,7 +132,7 @@ pretrainModel <- function(parquetFolder,
   yaml::write_yaml(trainModelSettings,
                    yamlFileName)
   
-  reticulate::use_virtualenv("apollo")
+  # reticulate::use_virtualenv("apollo")
   ensurePythonFolderSet()
   
   trainModelModule <- reticulate::import("training.train_model")

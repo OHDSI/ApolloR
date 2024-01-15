@@ -178,7 +178,7 @@ processCdmData <- function(cdmDataPath,
   yaml::write_yaml(cdmProcessingSettings,
                    yamlFileName)
   
-  reticulate::use_virtualenv("apollo")
+  # reticulate::use_virtualenv("apollo")
   ensurePythonFolderSet()
   
   cdmProcessorModule <- reticulate::import("cdm_processing.cdm_processor")
@@ -211,7 +211,7 @@ trainModel <- function(pretrainedModelFolder,
   yaml::write_yaml(trainModelSettings,
                    yamlFileName)
   
-  reticulate::use_virtualenv("apollo")
+  # reticulate::use_virtualenv("apollo")
   ensurePythonFolderSet()
   
   trainModelModule <- reticulate::import("training.train_model")
@@ -242,7 +242,7 @@ predictModel <- function(fineTunedModelFolder,
   
   resultFileName <- tempfile("prediction", fileext = ".csv")
   on.exit(unlink(resultFileName), add = TRUE)
-  reticulate::use_virtualenv("apollo")
+  # reticulate::use_virtualenv("apollo")
   ensurePythonFolderSet()
   
   trainModelModule <- reticulate::import("training.train_model")
