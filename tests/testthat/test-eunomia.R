@@ -92,13 +92,13 @@ test_that("Fine-tune on Eunomia", {
   labels <- tibble(rowId = rowIds,
                    outcomeCount = rpois(length(rowIds), 0.2))
   trainingSettings <- createTrainingSettings(numEpochs = 1)
-  fineTuneModel(pretrainedModelFolder = pretrainedModelFolder,
-                fineTunedModelFolder = fineTunedModelFolder,
-                covariateData = covariateData,
-                labels = labels,
-                trainingSettings = trainingSettings,
-                modelType = "lstm",
-                maxCores = 1)
+  model <- fineTuneModel(pretrainedModelFolder = pretrainedModelFolder,
+                         fineTunedModelFolder = fineTunedModelFolder,
+                         covariateData = covariateData,
+                         labels = labels,
+                         trainingSettings = trainingSettings,
+                         modelType = "lstm",
+                         maxCores = 1)
   expect_true(file.exists(file.path(fineTunedModelFolder, "checkpoint_001.pth")))
 })
 
@@ -118,7 +118,9 @@ test_that("Predict on Eunomia", {
   rowIds <- covariateData$covariates %>%
     pull(.data$rowId)
   population <- tibble(rowId = rowIds)
-  prediction <- predictFineTuned(fineTunedModelFolder = fineTunedModelFolder,
+  model <- list(fineTunedModelFolder = fineTunedModelFolder)
+  class(model) <- "ApolloFineTunedModel"
+  prediction <- predictFineTuned(fineTunedModel = model,
                                  covariateData = covariateData,
                                  population = population,
                                  maxCores = 1)

@@ -88,12 +88,15 @@ fineTuneModel <- function(pretrainedModelFolder,
              fineTunedModelFolder = fineTunedModelFolder,
              trainingSettings = trainingSettings,
              modelType = modelType)
-  
+  # Create a simply output object that just holds the path to the model:
+  output <- list(fineTunedModelFolder = fineTunedModelFolder)
+  class(output) <- "ApolloFineTunedModel"
+  return(output)
 }
 
 #' Use a fine-tuned model to predict
 #'
-#' @param fineTunedModelFolder   The folder where the fine-tuned model was written by `fineTuneModel()`.
+#' @param fineTunedModel        The fine-tuned model created using `fineTuneModel()`.
 #' @param covariateData         The `CovariateData` object containing the CDM data covariates.
 #' @param population            The population predict for. A data frame with at least one columns:
 #'                              `rowId` and `outcomeCount`. 
@@ -106,18 +109,18 @@ fineTuneModel <- function(pretrainedModelFolder,
 #' containing the probability of belonging to the class.
 #' 
 #' @export
-predictFineTuned <- function(fineTunedModelFolder,
+predictFineTuned <- function(fineTunedModel,
                              covariateData,
                              population,
                              maxCores = 5) {
   errorMessages <- checkmate::makeAssertCollection()
-  checkmate::assertCharacter(fineTunedModelFolder, len = 1, add = errorMessages)
+  checkmate::assertClass(fineTunedModel, "ApolloFineTunedModel", add = errorMessages)
   # TODO: add check for covariate data
   checkmate::assertDataFrame(population, add = errorMessages)
   checkmate::assertNames(names(population), must.include = c("rowId"))
   checkmate::assertInt(maxCores, lower = 1, add = errorMessages)
   checkmate::reportAssertions(collection = errorMessages)
-  
+  fineTunedModelFolder <- fineTunedModel$fineTunedModelFolder
   parquetRootFolder <- attr(covariateData, "metaData")$parquetRootFolder
   population <- population %>%
     mutate(outcomeCount = 0)

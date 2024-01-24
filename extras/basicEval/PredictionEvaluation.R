@@ -1,4 +1,5 @@
 # Code for evaluating in the context of 3 patient-level prediction problems
+# Assumes a model was already pretrained on the entire database.
 library(dplyr)
 
 
@@ -88,9 +89,12 @@ population <- DatabaseConnector::renderTranslateQuerySql(
   target_id = targetId,
   outcome_id = outcomeId,
   snakeCaseToCamelCase = TRUE)
+DatabaseConnector::disconnect(connection)
 saveRDS(population, file.path(predictionFolder, "FullPopulation.rds"))
 
 # Select random sample and evenly split into train, test, and validation
+population <- readRDS(file.path(predictionFolder, "FullPopulation.rds"))
+
 sets <- population %>%
   mutate(rnd = runif(n())) %>%
   arrange(rnd) %>%
@@ -103,6 +107,7 @@ sets <- population %>%
 saveRDS(sets, file.path(predictionFolder, "Sets.rds"))
 
 # Extract covariates from database
+connection <- DatabaseConnector::connect(connectionDetails)
 data <- sets %>%
   select(subjectId, cohortStartDate) %>%
   mutate(cohortDefinitionId = 1)
@@ -116,7 +121,7 @@ DatabaseConnector::insertTable(
   camelCaseToSnakeCase = TRUE)
 covariateSettings <- FeatureExtraction::createDefaultCovariateSettings(
   excludedCovariateConceptIds = 900000010
-  )
+)
 covariateData <- FeatureExtraction::getDbCovariateData(
   connection = connection,
   cdmDatabaseSchema = cdmDatabaseSchema,
@@ -134,7 +139,6 @@ covariateData2 <- FeatureExtraction::getDbCovariateData(
   covariateSettings = covariateSettings2
 )
 FeatureExtraction::saveCovariateData(covariateData2, file.path(predictionFolder, "CmdCovs.zip"))
-
 DatabaseConnector::disconnect(connection)
 
 # Train models -----------------------------------------------------------------
@@ -145,25 +149,38 @@ trainSet <- sets %>%
   filter(set == "train") %>%
   select(rowId = subjectId, outcomeCount = hasOutcome)
 
-
 validationSet <- sets %>%
   filter(set == "validation") %>%
   select(rowId = subjectId, outcomeCount = hasOutcome)
 
 # CEHR-BERT
-covariateData2 <- FeatureExtraction::loadCovariateData(file.path(predictionFolder, "CmdCovs.zip"))
+covariateData <- FeatureExtraction::loadCovariateData(file.path(predictionFolder, "CmdCovs.zip"))
 fineTunedModelFolder <- file.path(predictionFolder, "fineTuned")
-trainSettings <- ApolloR::createTrainingSettings(trainFraction = 0.8,
-                                                 numEpochs = 20)
-                                                 
+trainSettings <- ApolloR::createTrainingSettings(trainFraction = 1,
+                                                 numEpochs = 20,
+                                                 numFreezeEpochs = 999) # Always freeze pretrained weights
+
 model <- ApolloR::fineTuneModel(
   pretrainedModelFolder = pretrainedModelFolder,
   fineTunedModelFolder = fineTunedModelFolder,
-  covariateData = covariateData2,
+  covariateData = covariateData,
   labels = trainSet,
   trainingSettings = trainSettings,
+  modelType = "lstm",
   maxCores = 4)
-
+saveRDS(model, file.path(predictionFolder, "fineTunedModel.rds"))
+covariateData <- FeatureExtraction::loadCovariateData(file.path(predictionFolder, "CmdCovs.zip"))
+prediction <- ApolloR::predictFineTuned(fineTunedModel = model,
+                                        covariateData = covariateData,
+                                        population = validationSet,
+                                        maxCores = 4)
+prediction <- prediction %>%
+  rename(rowId = person_id) %>%
+  inner_join(validationSet, by = join_by(rowId))
+saveRDS(prediction, file.path(predictionFolder, "ApolloPrediction.rds"))
+rocObject <- pROC::roc(prediction$outcomeCount, prediction$prediction)
+pROC::auc(rocObject)
+# Area under the curve: 0.6711
 
 # LASSO
 covariateData <- FeatureExtraction::loadCovariateData(file.path(predictionFolder, "AllDefaultCovs.zip"))
@@ -181,7 +198,7 @@ fit <- Cyclops::fitCyclopsModel(cyclopsData,
                                                                  noiseLevel = "quiet",
                                                                  fold = 10,
                                                                  threads = 10))
-                                
+
 covariateData <- FeatureExtraction::loadCovariateData(file.path(predictionFolder, "AllDefaultCovs.zip"))
 covariateData <- FeatureExtraction::filterByRowId(covariateData,  validationSet$rowId)
 covariateData <- FeatureExtraction::tidyCovariateData(covariateData)
@@ -198,5 +215,5 @@ prediction <- prediction %>%
 saveRDS(prediction, file.path(predictionFolder, "LassoPrediction.rds"))
 rocObject <- pROC::roc(prediction$outcomeCount, prediction$value)
 pROC::auc(rocObject)
-# 0.7096
+# Area under the curve: 0.5
 

@@ -4,10 +4,10 @@
 \alias{predictFineTuned}
 \title{Use a fine-tuned model to predict}
 \usage{
-predictFineTuned(fineTunedModelFolder, covariateData, population, maxCores = 5)
+predictFineTuned(fineTunedModel, covariateData, population, maxCores = 5)
 }
 \arguments{
-\item{fineTunedModelFolder}{The folder where the fine-tuned model was written by \code{fineTuneModel()}.}
+\item{fineTunedModel}{The fine-tuned model created using \code{fineTuneModel()}.}
 
 \item{covariateData}{The \code{CovariateData} object containing the CDM data covariates.}
 

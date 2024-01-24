@@ -42,5 +42,12 @@ reticulate::virtualenv_create(
 reticulate::use_virtualenv("apollo")
 ```
 
+The following error has been observed on Windows: "ImportError: DLL load failed while importing lib: The specified procedure could not be found.". The solution appears to be to try restarting RStudio until the error goes away. Here's a quick check if pyarrow (which causes the error) is still in a bad state:
+
+```r
+reticulate::use_virtualenv("apollo")
+reticulate::import("pyarrow")
+```
+
 
 Under development. Do not use.
