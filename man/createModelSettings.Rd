@@ -29,7 +29,7 @@ createModelSettings(
 
 \item{visitOrderEmbedding}{Use visit order embedding?}
 
-\item{segmentEmbedding}{Use segement embedding?}
+\item{segmentEmbedding}{Use segment embedding?}
 
 \item{ageEmbedding}{Use age embedding?}
 

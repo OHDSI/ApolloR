@@ -19,7 +19,7 @@
 #' @param maxSequenceLength           The maximum length of the input sequence.
 #' @param conceptEmbedding            Use concept embedding?
 #' @param visitOrderEmbedding         Use visit order embedding?
-#' @param segmentEmbedding            Use segement embedding?
+#' @param segmentEmbedding            Use segment embedding?
 #' @param ageEmbedding                Use age embedding?
 #' @param dateEmbedding               Use date embedding?
 #' @param visitConceptEmbedding       Use visit concept embedding?

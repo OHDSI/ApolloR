@@ -97,6 +97,7 @@ test_that("Fine-tune on Eunomia", {
                 covariateData = covariateData,
                 labels = labels,
                 trainingSettings = trainingSettings,
+                modelType = "lstm",
                 maxCores = 1)
   expect_true(file.exists(file.path(fineTunedModelFolder, "checkpoint_001.pth")))
 })

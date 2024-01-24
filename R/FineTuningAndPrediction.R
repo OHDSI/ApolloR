@@ -46,6 +46,7 @@ createTrainingSettings <- function(trainFraction = 1.0,
 #' @param labels                The labels to use for training. A data frame containing at least two
 #'                              columns: `rowId` and `outcomeCount`. 
 #' @param trainingSettings      Parameters used when training the model.
+#' @param modelType             Type of model head: 'lstm' or 'linear'.
 #' @param maxCores              The maximum number of CPU cores to use during fine-tuning. If a GPU 
 #'                              is found (CUDA or MPS), it will automatically be used irrespective 
 #'                              of the  setting of `maxCores`.
@@ -60,6 +61,7 @@ fineTuneModel <- function(pretrainedModelFolder,
                           covariateData,
                           labels,
                           trainingSettings = createTrainingSettings(),
+                          modelType = "lstm",
                           maxCores = 5) {
   errorMessages <- checkmate::makeAssertCollection()
   checkmate::assertCharacter(pretrainedModelFolder, len = 1, add = errorMessages)
@@ -67,6 +69,8 @@ fineTuneModel <- function(pretrainedModelFolder,
   # TODO: add check for covariate data
   checkmate::assertDataFrame(labels, add = errorMessages)
   checkmate::assertNames(names(labels), must.include = c("rowId", "outcomeCount"))
+  checkmate::assertString(modelType, add = errorMessages)
+  checkmate::assertChoice(modelType, c("lstm", "linear"))
   checkmate::assertInt(maxCores, lower = 1, add = errorMessages)
   checkmate::reportAssertions(collection = errorMessages)
   
@@ -82,7 +86,8 @@ fineTuneModel <- function(pretrainedModelFolder,
   trainModel(pretrainedModelFolder = pretrainedModelFolder,
              personSequenceFolder = file.path(parquetRootFolder, "person_sequence"),
              fineTunedModelFolder = fineTunedModelFolder,
-             trainingSettings =trainingSettings)
+             trainingSettings = trainingSettings,
+             modelType = modelType)
   
 }
 
@@ -188,7 +193,8 @@ processCdmData <- function(cdmDataPath,
 trainModel <- function(pretrainedModelFolder,
                        personSequenceFolder,
                        fineTunedModelFolder,
-                       trainingSettings) {
+                       trainingSettings,
+                       modelType) {
   dir.create(fineTunedModelFolder)
   modelSettings <- yaml::read_yaml(file.path(pretrainedModelFolder, "model.yaml"))
   trainModelSettings <- list(
@@ -201,7 +207,9 @@ trainModel <- function(pretrainedModelFolder,
     ),
     learning_objectives = list(
       truncate_type = "tail",
-      label_prediction = TRUE
+      predict_new = FALSE,
+      label_prediction = tolower(modelType) != "lstm",
+      lstm_label_prediction = tolower(modelType) == "lstm"
     ),
     training = trainingSettings,
     model = modelSettings
@@ -216,22 +224,25 @@ trainModel <- function(pretrainedModelFolder,
   
   trainModelModule <- reticulate::import("training.train_model")
   trainModelModule$main(c(yamlFileName, ""))
+  yaml::write_yaml(trainModelSettings$learning_objectives,
+                   file.path(fineTunedModelFolder, "learning_objectives.yaml"))
 }
 
 predictModel <- function(fineTunedModelFolder,
                          personSequenceFolder) {
   modelSettings <- yaml::read_yaml(file.path(fineTunedModelFolder, "model.yaml"))
+  learningObjectives <- yaml::read_yaml(file.path(fineTunedModelFolder, "learning_objectives.yaml"))
+  learningObjectives$predict_new <- TRUE
+  resultFileName <- tempfile("prediction", fileext = ".csv")
   trainModelSettings <- list(
     system = list(
       sequence_data_folder = personSequenceFolder,
       output_folder= fineTunedModelFolder,
+      prediction_output_file = resultFileName,
       batch_size = as.integer(32),
       checkpoint_every = as.integer(10)
     ),
-    learning_objectives = list(
-      truncate_type = "tail",
-      new_label_prediction = TRUE
-    ),
+    learning_objectives = learningObjectives,
     training = createTrainingSettings(trainFraction = 0),
     model = modelSettings
   )
@@ -239,16 +250,17 @@ predictModel <- function(fineTunedModelFolder,
   on.exit(unlink(yamlFileName))
   yaml::write_yaml(trainModelSettings,
                    yamlFileName)
-  
-  resultFileName <- tempfile("prediction", fileext = ".csv")
-  on.exit(unlink(resultFileName), add = TRUE)
-  # reticulate::use_virtualenv("apollo")
   ensurePythonFolderSet()
-  
   trainModelModule <- reticulate::import("training.train_model")
-  trainModelModule$main(c(yamlFileName, resultFileName))
-  # Workaround for issue https://github.com/tidyverse/vroom/issues/519:
-  readr::local_edition(1)
-  prediction <- readr::read_csv(resultFileName, show_col_types = FALSE)
+  prediction <- tryCatch({
+    trainModelModule$main(c(yamlFileName, ""))
+    # Workaround for issue https://github.com/tidyverse/vroom/issues/519:
+    readr::local_edition(1)
+    readr::read_csv(resultFileName, show_col_types = FALSE)
+  },
+  finally = {
+    unlink(resultFileName)
+  })
   return(prediction)
+  
 }

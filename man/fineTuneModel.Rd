@@ -10,6 +10,7 @@ fineTuneModel(
   covariateData,
   labels,
   trainingSettings = createTrainingSettings(),
+  modelType = "lstm",
   maxCores = 5
 )
 }
@@ -24,6 +25,8 @@ fineTuneModel(
 columns: \code{rowId} and \code{outcomeCount}.}
 
 \item{trainingSettings}{Parameters used when training the model.}
+
+\item{modelType}{Type of model head: 'lstm' or 'linear'.}
 
 \item{maxCores}{The maximum number of CPU cores to use during fine-tuning. If a GPU
 is found (CUDA or MPS), it will automatically be used irrespective
