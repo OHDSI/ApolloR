@@ -52,8 +52,13 @@ CohortGenerator::generateCohortSet(
 DatabaseConnector::disconnect(connection)
 
 #  Extract data ----------------------------------------------------------------
+# Focusing on example 2 for now:
+targetId <- targetId2
+outcomeId <- outcomeId2
 predictionFolder <- file.path(rootFolder, "pred2")
 dir.create(predictionFolder)
+
+# Get the target cohort and their labels (PLP normaly does this)
 connection <- DatabaseConnector::connect(connectionDetails)
 sql <- "
 SELECT target_cohort.subject_id,
@@ -80,24 +85,24 @@ population <- DatabaseConnector::renderTranslateQuerySql(
   sql = sql,
   schema = cohortDatabaseSchema,
   table = cohortTable,
-  target_id = targetId2,
-  outcome_id = outcomeId2,
+  target_id = targetId,
+  outcome_id = outcomeId,
   snakeCaseToCamelCase = TRUE)
 saveRDS(population, file.path(predictionFolder, "FullPopulation.rds"))
 
+# Select random sample and evenly split into train, test, and validation
 sets <- population %>%
   mutate(rnd = runif(n())) %>%
   arrange(rnd) %>%
   mutate(rowNumber = row_number()) %>%
-  filter(rowNumber <= 300000) %>%
-  mutate(set = if_else(rowNumber <= 100000, "train", 
-                       if_else(rowNumber <= 200000, "test",
+  filter(rowNumber <= 3000) %>%
+  mutate(set = if_else(rowNumber <= 1000, "train", 
+                       if_else(rowNumber <= 2000, "test",
                                "validation"))) %>%
   select(-rnd, -rowNumber)
-
-
 saveRDS(sets, file.path(predictionFolder, "Sets.rds"))
 
+# Extract covariates from database
 data <- sets %>%
   select(subjectId, cohortStartDate) %>%
   mutate(cohortDefinitionId = 1)
@@ -120,7 +125,6 @@ covariateData <- FeatureExtraction::getDbCovariateData(
   covariateSettings = covariateSettings
 )
 FeatureExtraction::saveCovariateData(covariateData, file.path(predictionFolder, "AllDefaultCovs.zip"))
-
 covariateSettings2 <- ApolloR::createCdmCovariateSettings(folder = file.path(predictionFolder, "CdmCovsFolder"))
 covariateData2 <- FeatureExtraction::getDbCovariateData(
   connection = connection,
@@ -130,7 +134,6 @@ covariateData2 <- FeatureExtraction::getDbCovariateData(
   covariateSettings = covariateSettings2
 )
 FeatureExtraction::saveCovariateData(covariateData2, file.path(predictionFolder, "CmdCovs.zip"))
-
 
 DatabaseConnector::disconnect(connection)
 
