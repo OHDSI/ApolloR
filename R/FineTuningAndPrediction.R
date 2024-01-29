@@ -139,15 +139,21 @@ predictFineTuned <- function(fineTunedModel,
   
 }
 
-writeLabelsToParquet <- function(labels, parquetRootFolder) {
+writeLabelsToParquet <- function(labels, parquetRootFolder, labelFolder = NULL) {
   labels <- labels %>%
-    transmute(observation_period_id = bit64::as.integer64(.data$rowId), label = (.data$outcomeCount != 0))
-  labelFolder <- file.path(parquetRootFolder, "label")
+    dplyr::mutate(observation_period_id = bit64::as.integer64(.data$rowId),
+                  label = (.data$outcomeCount != 0),
+                  .keep = "unused") %>%
+    dplyr::select("observation_period_id", "label", dplyr::everything())
+  if (is.null(labelFolder)) {
+    labelFolder <- file.path(parquetRootFolder, "label")
+  }
+   
   if (dir.exists(labelFolder)) {
     # Already exist, probably from an earlier training or prediction
     unlink(labelFolder, recursive = TRUE)
   }
-  dir.create(labelFolder)
+  dir.create(labelFolder, recursive = TRUE)
   partitionFiles <- list.files(file.path(parquetRootFolder, "observation_period"), pattern = ".parquet$")
   for (partitionFile in partitionFiles) {
     op <- arrow::read_parquet(file.path(parquetRootFolder, "observation_period", partitionFile))
@@ -162,7 +168,7 @@ writeLabelsToParquet <- function(labels, parquetRootFolder) {
 processCdmData <- function(cdmDataPath, 
                            personSequenceFolder, 
                            mappingSettings,
-                           hasLabels = FALSE,
+                           labels = FALSE,
                            maxCores) {
   message("Processing CDM data")
   if (dir.exists(personSequenceFolder)) {
@@ -172,7 +178,7 @@ processCdmData <- function(cdmDataPath,
   cdmProcessingSettings <- list(
     system = list(
       cdm_data_path = cdmDataPath,
-      label_sub_folder = if (hasLabels) "label" else NULL,
+      labels = labels,
       max_cores = as.integer(maxCores),
       output_path = personSequenceFolder
     ),
