@@ -9,7 +9,8 @@ createTrainingSettings(
   numEpochs = 100,
   numFreezeEpochs = 1,
   learningRate = 0.001,
-  weightDecay = 0
+  weightDecay = 0,
+  batchSize = 32
 )
 }
 \arguments{

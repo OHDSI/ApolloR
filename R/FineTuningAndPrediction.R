@@ -30,7 +30,8 @@ createTrainingSettings <- function(trainFraction = 1.0,
                                    numEpochs = 100,
                                    numFreezeEpochs = 1,
                                    learningRate = 0.001,
-                                   weightDecay = 0.0) {
+                                   weightDecay = 0.0,
+                                   batchSize = 32) {
   settings <- list()
   for (name in names(formals(createTrainingSettings))) {
     settings[[SqlRender::camelCaseToSnakeCase(name)]] <- intToInteger(get(name))
@@ -203,22 +204,24 @@ trainModel <- function(pretrainedModelFolder,
                        personSequenceFolder,
                        fineTunedModelFolder,
                        trainingSettings,
-                       modelType) {
+                       predictionHead) {
   dir.create(fineTunedModelFolder)
   modelSettings <- yaml::read_yaml(file.path(pretrainedModelFolder, "model.yaml"))
+  batchSize <- trainingSettings$batchSize
+  trainingSettings$batch_size <- NULL
   trainModelSettings <- list(
     system = list(
       sequence_data_folder = personSequenceFolder,
-      output_folder= fineTunedModelFolder,
+      output_folder = fineTunedModelFolder,
       pretrained_model_folder = pretrainedModelFolder,
-      batch_size = as.integer(32),
-      checkpoint_every = as.integer(10)
+      batch_size = batchSize,
+      checkpoint_every = as.integer(1)
     ),
     learning_objectives = list(
       truncate_type = "tail",
       predict_new = FALSE,
-      label_prediction = tolower(modelType) != "lstm",
-      lstm_label_prediction = tolower(modelType) == "lstm"
+      label_prediction = tolower(predictionHead) != "lstm",
+      lstm_label_prediction = tolower(predictionHead) == "lstm"
     ),
     training = trainingSettings,
     model = modelSettings

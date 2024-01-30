@@ -88,6 +88,7 @@ modelSettings <- ApolloR::createApolloRFineTuner(numEpochs = 1,
                                                  predictionHead = "lstm",
                                                  pretrainedModelFolder = pretrainedModelFolder,
                                                  parquetRootFolder = file.path(rootFolder, "data", "synthetic_data"),
+                                                 personSequenceFolder = "./plpResults/1/personSequence/",
                                                  maxCores = 1)
 
 populationSettings <- PatientLevelPrediction::createStudyPopulationSettings(
