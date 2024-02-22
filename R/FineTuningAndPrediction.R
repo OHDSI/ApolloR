@@ -82,13 +82,13 @@ fineTuneModel <- function(pretrainedModelFolder,
   processCdmData(cdmDataPath = parquetRootFolder, 
                  personSequenceFolder = file.path(parquetRootFolder, "person_sequence"),
                  mappingSettings = mappingSettings,
-                 hasLabels = TRUE,
+                 labels = TRUE,
                  maxCores = maxCores)
   trainModel(pretrainedModelFolder = pretrainedModelFolder,
              personSequenceFolder = file.path(parquetRootFolder, "person_sequence"),
              fineTunedModelFolder = fineTunedModelFolder,
              trainingSettings = trainingSettings,
-             modelType = modelType)
+             predictionHead = modelType)
   # Create a simply output object that just holds the path to the model:
   output <- list(fineTunedModelFolder = fineTunedModelFolder)
   class(output) <- "ApolloFineTunedModel"
@@ -132,7 +132,7 @@ predictFineTuned <- function(fineTunedModel,
   processCdmData(cdmDataPath = parquetRootFolder, 
                  personSequenceFolder = personSequenceFolder,
                  mappingSettings = mappingSettings,
-                 hasLabels = TRUE,
+                 labels = TRUE,
                  maxCores = maxCores)
   prediction <- predictModel(personSequenceFolder = personSequenceFolder,
                              fineTunedModelFolder = fineTunedModelFolder)
