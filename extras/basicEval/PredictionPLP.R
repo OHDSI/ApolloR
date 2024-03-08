@@ -80,11 +80,11 @@ plpData <- PatientLevelPrediction::loadPlpData(file.path(predictionFolder, "plpD
 
 outcomeId <- unique(plpData$outcomes$outcomeId)
 
-modelSettings <- ApolloR::createApolloFinetuner(numEpochs = 1,
-                                                 numFreezeEpochs = 1,
+modelSettings <- ApolloR::createApolloFinetuner(numEpochs = 10,
+                                                 numFreezeEpochs = 0,
                                                  learningRate = 3e-4,
                                                  weightDecay = 1e-5,
-                                                 batchSize = 2,
+                                                 batchSize = 8,
                                                  predictionHead = "lstm",
                                                  pretrainedModelFolder = pretrainedModelFolder,
                                                  parquetRootFolder = file.path(rootFolder, "synthetic_data"),
@@ -107,16 +107,35 @@ populationSettings <- PatientLevelPrediction::createStudyPopulationSettings(
     )
 
 reticulate::use_virtualenv("apollo")
+
+population <- PatientLevelPrediction::createStudyPopulation(
+  plpData = plpData,
+  outcomeId = outcomeId,
+  populationSettings = populationSettings
+)
+
+# sample 200 with the outcome from population
+positive <- population %>%
+  dplyr::filter(outcomeCount == 1) %>%
+  sample_n(200)
+negative <- population %>%
+  dplyr::filter(outcomeCount == 0) %>%
+  sample_n(200)
+population <- dplyr::bind_rows(positive, negative)
+plpData$population <- population
+
 plpResults <- PatientLevelPrediction::runPlp(
   plpData = plpData,
   outcomeId = outcomeId,
   modelSettings = modelSettings,
   populationSettings = populationSettings,
+  sampleSettings = PatientLevelPrediction::createSampleSettings("underSample"),
   analysisId = 1,
   analysisName = "ApolloTest",
   splitSettings = PatientLevelPrediction::createDefaultSplitSetting(splitSeed = 42),
   executeSettings = PatientLevelPrediction::createExecuteSettings(
     runSplitData = TRUE,
+    runSampleData = TRUE,
     runPreprocessData = FALSE,
     runModelDevelopment = TRUE,
   ),

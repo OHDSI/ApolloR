@@ -9,7 +9,7 @@
 #' @param pretrainedModelFolder The folder containing the pretrained model.
 #' @param parquetRootFolder The folder where the CDM data was written by the `extractCdmToParquet()` function.
 #' @param personSequenceFolder The folder where the person sequence data was written by the 
-#' `processCdmData()` function. If not specified `processCdmData()` will be called
+#' `processCdmData()` function. 
 #' @param maxCores The maximum number of CPU cores to use during fine-tuning. 
 #' @param device The device to use for fine-tuning. Options are "cuda:x" where x is a number or "cpu".
 #'@export
@@ -64,6 +64,7 @@ createApolloFinetuner <- function(numEpochs = 1,
     maxCores = maxCores,
     device = device,
     batchsize = batchSize,
+    numEpochs = numEpochs,
     param = param,
     saveType = "file",
     modelParamNames = c("learningRate", "weightDecay", "predictionHead", "numFreezeEpochs"),
@@ -93,49 +94,74 @@ finetune <- function(
   if (!is.null(trainData$folds)) {
     trainData$labels <- merge(trainData$labels, trainData$fold, by = "rowId")
   }
-  
-  browser()
+  # largest non-test fold is validation, rest of positive folds is training
+  isTrainingCondition <- (trainData$labels$index != max(trainData$labels$index)) & (trainData$labels$index > 0)
+  labels <- trainData$labels %>% 
+    dplyr::mutate(is_training = isTrainingCondition) %>%
+    dplyr::select(.data$subjectId, .data$outcomeCount, .data$is_training) %>%
+    dplyr::rename(rowId = "subjectId")
+   
   if (is.null(modelSettings$sequenceFolder)) {
+    modelSettings$sequenceFolder <- tempfile()
+    writeLabelsToParquet(labels = labels, 
+                         parquetRootFolder = modelSettings$dataFolder,
+                         labelFolder = file.path(analysisPath, "labels"))
     mappingSettings <- yaml::read_yaml(file.path(modelSettings$modelFolder, "cdm_mapping.yaml"))
     modelSettings$sequenceFolder <- tempfile()
     processCdmData(cdmDataPath = modelSettings$dataFolder, 
                    personSequenceFolder = modelSettings$sequenceFolder,
                    mappingSettings = mappingSettings,
+                   labels = file.path(analysisPath, "labels"),
                    maxCores = modelSettings$maxCores)
-  }
-  # largest non-test fold is validation, rest of positive folds is training
-  isTrainingCondition <- (trainData$labels$index != max(trainData$labels$index)) & (trainData$labels$index > 0)
-  labels <- trainData$labels %>% 
-    dplyr::mutate(isTraining = isTrainingCondition) %>%
-    dplyr::select(.data$subjectId, .data$outcomeCount, .data$isTraining) %>%
-    dplyr::rename(rowId = "subjectId")
+    outDir <- file.path(analysisPath, "sequences")
+    if (!dir.exists(outDir)) {
+      dir.create(outDir, recursive = TRUE)      
+    }
+    status <- file.copy(from = file.path(modelSettings$sequenceFolder, dir(modelSettings$sequenceFolder)), 
+                        to = outDir, 
+                        recursive = TRUE)
+    if (!all(status)) {
+      stop("Failed to copy sequence folder to analysis path")
+    }
+  } else if (dir.exists(file.path(analysisPath, "sequences"))) {
+      # skip processing if sequences already exist 
+  } else {
+    # I've given the dir with all the person sequences of the whole db
+    # filter down to the prediction problem
+    ensurePythonFolderSet()
+    utils <- reticulate::import("cdm_processing.cdm_processor_utils")
     
-  writeLabelsToParquet(labels = labels, 
-                       parquetRootFolder = modelSettings$dataFolder,
-                       labelFolder = file.path(analysisPath, "labels"))
-  
+    utils$filter_prediction_problem(modelSettings$sequenceFolder,
+                                    reticulate::r_to_py(labels),
+                                    analysisPath)
+    file.copy(from = file.path(modelSettings$sequenceFolder, "cdm_mapping.yaml"),
+              to = file.path(analysisPath, "sequences","cdm_mapping.yaml"))
+  }
+  browser()
   preTrainedModelSettings <- yaml::read_yaml(file.path(modelSettings$modelFolder, "model.yaml"))
+  param <- modelSettings$param[[1]]
   trainingSettings <- list(
     train_fraction = "plp",
-    num_epochs = modelSettings$param$numEpochs,
-    num_freeze_epochs = modelSettings$param$numFreezeEpochs,
-    learning_rate = modelSettings$param$learningRate,
-    weight_decay = modelSettings$param$weightDecay,
-    max_batches = NULL
+    num_epochs = as.integer(modelSettings$numEpochs),
+    num_freeze_epochs = as.integer(param$numFreezeEpochs),
+    learning_rate = param$learningRate,
+    weight_decay = param$weightDecay,
+    max_batches = 10L
   )
   trainModelSettings <- list(
     system = list(
-      sequence_data_folder = modelSettings$sequenceFolder,
+      sequence_data_folder = normalizePath(file.path(analysisPath, "sequences")),
       output_folder = analysisPath,
-      pretrained_model_folder = pretrainedModelFolder,
-      batch_size = modelSettings$param$bathSize,
-      checkpoint_every = as.integer(1)
+      pretrained_model_folder = modelSettings$modelFolder,
+      batch_size = as.integer(modelSettings$batchsize),
+      checkpoint_every = as.integer(1),
+      writer = "json"
     ),
     learning_objectives = list(
       truncate_type = "tail",
       predict_new = FALSE,
-      label_prediction = tolower(modelSettings$param$predictionHead) != "lstm",
-      lstm_label_prediction = tolower(modelSettings$param$predictionHead) == "lstm"
+      label_prediction = tolower(param$predictionHead) != "lstm",
+      lstm_label_prediction = tolower(param$predictionHead) == "lstm"
     ),
     training = trainingSettings,
     model = preTrainedModelSettings
