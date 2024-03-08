@@ -30,7 +30,8 @@ createTrainingSettings <- function(trainFraction = 1.0,
                                    numEpochs = 100,
                                    numFreezeEpochs = 1,
                                    learningRate = 0.001,
-                                   weightDecay = 0.0) {
+                                   weightDecay = 0.0,
+                                   batchSize = 32) {
   settings <- list()
   for (name in names(formals(createTrainingSettings))) {
     settings[[SqlRender::camelCaseToSnakeCase(name)]] <- intToInteger(get(name))
@@ -81,13 +82,13 @@ fineTuneModel <- function(pretrainedModelFolder,
   processCdmData(cdmDataPath = parquetRootFolder, 
                  personSequenceFolder = file.path(parquetRootFolder, "person_sequence"),
                  mappingSettings = mappingSettings,
-                 hasLabels = TRUE,
+                 labels = TRUE,
                  maxCores = maxCores)
   trainModel(pretrainedModelFolder = pretrainedModelFolder,
              personSequenceFolder = file.path(parquetRootFolder, "person_sequence"),
              fineTunedModelFolder = fineTunedModelFolder,
              trainingSettings = trainingSettings,
-             modelType = modelType)
+             predictionHead = modelType)
   # Create a simply output object that just holds the path to the model:
   output <- list(fineTunedModelFolder = fineTunedModelFolder)
   class(output) <- "ApolloFineTunedModel"
@@ -131,7 +132,7 @@ predictFineTuned <- function(fineTunedModel,
   processCdmData(cdmDataPath = parquetRootFolder, 
                  personSequenceFolder = personSequenceFolder,
                  mappingSettings = mappingSettings,
-                 hasLabels = TRUE,
+                 labels = TRUE,
                  maxCores = maxCores)
   prediction <- predictModel(personSequenceFolder = personSequenceFolder,
                              fineTunedModelFolder = fineTunedModelFolder)
@@ -139,15 +140,21 @@ predictFineTuned <- function(fineTunedModel,
   
 }
 
-writeLabelsToParquet <- function(labels, parquetRootFolder) {
+writeLabelsToParquet <- function(labels, parquetRootFolder, labelFolder = NULL) {
   labels <- labels %>%
-    transmute(observation_period_id = bit64::as.integer64(.data$rowId), label = (.data$outcomeCount != 0))
-  labelFolder <- file.path(parquetRootFolder, "label")
+    dplyr::mutate(observation_period_id = bit64::as.integer64(.data$rowId),
+                  label = (.data$outcomeCount != 0),
+                  .keep = "unused") %>%
+    dplyr::select("observation_period_id", "label", dplyr::everything())
+  if (is.null(labelFolder)) {
+    labelFolder <- file.path(parquetRootFolder, "label")
+  }
+   
   if (dir.exists(labelFolder)) {
     # Already exist, probably from an earlier training or prediction
     unlink(labelFolder, recursive = TRUE)
   }
-  dir.create(labelFolder)
+  dir.create(labelFolder, recursive = TRUE)
   partitionFiles <- list.files(file.path(parquetRootFolder, "observation_period"), pattern = ".parquet$")
   for (partitionFile in partitionFiles) {
     op <- arrow::read_parquet(file.path(parquetRootFolder, "observation_period", partitionFile))
@@ -162,7 +169,7 @@ writeLabelsToParquet <- function(labels, parquetRootFolder) {
 processCdmData <- function(cdmDataPath, 
                            personSequenceFolder, 
                            mappingSettings,
-                           hasLabels = FALSE,
+                           labels = FALSE,
                            maxCores) {
   message("Processing CDM data")
   if (dir.exists(personSequenceFolder)) {
@@ -172,7 +179,7 @@ processCdmData <- function(cdmDataPath,
   cdmProcessingSettings <- list(
     system = list(
       cdm_data_path = cdmDataPath,
-      label_sub_folder = if (hasLabels) "label" else NULL,
+      labels = labels,
       max_cores = as.integer(maxCores),
       output_path = personSequenceFolder
     ),
@@ -197,22 +204,24 @@ trainModel <- function(pretrainedModelFolder,
                        personSequenceFolder,
                        fineTunedModelFolder,
                        trainingSettings,
-                       modelType) {
+                       predictionHead) {
   dir.create(fineTunedModelFolder)
   modelSettings <- yaml::read_yaml(file.path(pretrainedModelFolder, "model.yaml"))
+  batchSize <- trainingSettings$batchSize
+  trainingSettings$batch_size <- NULL
   trainModelSettings <- list(
     system = list(
       sequence_data_folder = personSequenceFolder,
-      output_folder= fineTunedModelFolder,
+      output_folder = fineTunedModelFolder,
       pretrained_model_folder = pretrainedModelFolder,
-      batch_size = as.integer(32),
-      checkpoint_every = as.integer(10)
+      batch_size = batchSize,
+      checkpoint_every = as.integer(1)
     ),
     learning_objectives = list(
       truncate_type = "tail",
       predict_new = FALSE,
-      label_prediction = tolower(modelType) != "lstm",
-      lstm_label_prediction = tolower(modelType) == "lstm"
+      label_prediction = tolower(predictionHead) != "lstm",
+      lstm_label_prediction = tolower(predictionHead) == "lstm"
     ),
     training = trainingSettings,
     model = modelSettings
