@@ -19,7 +19,7 @@ if (createCohort) {
     dbms = "duckdb",
     server = "~/database/database.duckdb")
   cdmDatabaseSchema <- "main"
-  cohortDatabaseSchema <- "main"
+  cohortDatabaseSchema <- "cohorts"
   cohortTable <- "apollo_test_cohorts"
 
 # Get cohort definitions -------------------------------------------------------
@@ -59,9 +59,9 @@ databaseDetails <- PatientLevelPrediction::createDatabaseDetails(
   cdmDatabaseSchema = cdmDatabaseSchema,
   cdmDatabaseName = "ducky",
   cdmDatabaseId = "ducky_v1",
-  cohortDatabaseSchema = cdmDatabaseSchema,
+  cohortDatabaseSchema = cohortDatabaseSchema,
   cohortTable = cohortTable,
-  outcomeDatabaseSchema = cdmDatabaseSchema,
+  outcomeDatabaseSchema = cohortDatabaseSchema,
   outcomeTable = cohortTable,
   targetId = targetId,
   outcomeIds = outcomeId
@@ -80,15 +80,15 @@ plpData <- PatientLevelPrediction::loadPlpData(file.path(predictionFolder, "plpD
 
 outcomeId <- unique(plpData$outcomes$outcomeId)
 
-modelSettings <- ApolloR::createApolloRFineTuner(numEpochs = 1,
+modelSettings <- ApolloR::createApolloFinetuner(numEpochs = 1,
                                                  numFreezeEpochs = 1,
                                                  learningRate = 3e-4,
                                                  weightDecay = 1e-5,
                                                  batchSize = 2,
                                                  predictionHead = "lstm",
                                                  pretrainedModelFolder = pretrainedModelFolder,
-                                                 parquetRootFolder = file.path(rootFolder, "data", "synthetic_data"),
-                                                 personSequenceFolder = "./plpResults/1/personSequence/",
+                                                 parquetRootFolder = file.path(rootFolder, "synthetic_data"),
+                                                 personSequenceFolder = file.path(rootFolder, "synthetic_sequence"),
                                                  maxCores = 1)
 
 populationSettings <- PatientLevelPrediction::createStudyPopulationSettings(
